@@ -11,7 +11,14 @@ pub union AnyInner<A, B, C> {
 }
 
 impl <A, B, C> AnyInner<A, B, C> {
-    pub fn select<T>(mut self) -> T {
+    pub fn select<T>(mut self) -> T
+    where
+        T: 'static,
+        A: 'static,
+        B: 'static,
+        C: 'static,
+    {
+        assert!(AnyItem::<T, A, B, C>::is_valid());
         unsafe {
             let t = ptr::read(&mut self as *mut _ as *mut T);
             mem::forget(self);
@@ -33,7 +40,13 @@ where
     }
 }
 
-impl<T, A, B, C> AnyItem<T, A, B, C> where T: 'static, A: 'static, B: 'static, C: 'static {
+impl<T, A, B, C> AnyItem<T, A, B, C>
+where
+    T: 'static,
+    A: 'static,
+    B: 'static,
+    C: 'static
+{
     fn is_valid() -> bool {
         use std::any::TypeId;
         let t_id = TypeId::of::<T>();
@@ -106,7 +119,13 @@ impl<T, A, B, C> Deref for AnyVec<T, A, B, C> {
     }
 }
 
-impl<T, A, B, C> AnyVec<T, A, B, C> where T: 'static, A: 'static, B: 'static, C: 'static {
+impl<T, A, B, C> AnyVec<T, A, B, C>
+where
+    T: 'static,
+    A: 'static,
+    B: 'static,
+    C: 'static
+{
     pub fn is_valid() -> bool {
         AnyItem::<T, A, B, C>::is_valid()
     }
