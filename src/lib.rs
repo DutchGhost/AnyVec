@@ -1,7 +1,7 @@
 #![feature(untagged_unions)]
 use std::{mem, ptr};
 use std::marker::PhantomData;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::fmt;
 
 pub union AnyInner<A, B, C> {
@@ -66,9 +66,17 @@ impl<T, A, B, C> AnyItem<T, A, B, C> where T: 'static, A: 'static, B: 'static, C
 
 impl<T, A, B, C> Deref for AnyItem<T, A, B, C> {
     type Target = T;
-    fn deref(&self) -> &T {
+    fn deref(&self) -> &Self::Target {
         unsafe { 
             mem::transmute(&self.data)
+        }
+    }
+}
+
+impl <T, A, B, C> DerefMut for AnyItem<T, A, B, C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe {
+            mem::transmute(&mut self.data)
         }
     }
 }
@@ -125,5 +133,25 @@ impl<T, A, B, C> AnyVec<T, A, B, C> where T: 'static, A: 'static, B: 'static, C:
             data: self.data,
             _m: PhantomData,
         }
+    }
+
+    pub fn map<U, F>(self, f: F) -> AnyVec<U, A, B, C> where U: 'static, F: Fn(T) -> U
+    {
+        let AnyVec { mut data, .. } = self;
+        unsafe {
+            let ptr = data.as_mut_ptr();
+            let len = data.len();
+            data.set_len(0);
+            for i in 0 .. len as isize {
+                let item_ptr = ptr.offset(i);
+                let any_t: AnyItem<T, A, B, C> = AnyItem::from_inner(ptr::read(item_ptr));
+                let t: T = any_t.into();
+                let u: U = f(t);
+                let any_u: AnyItem<U, A, B, C> = AnyItem::from(u);
+                ptr::write(item_ptr, any_u.into_inner());
+            }
+            data.set_len(len);
+        }
+        AnyVec { data, _m: PhantomData }
     }
 }
