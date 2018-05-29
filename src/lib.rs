@@ -86,6 +86,33 @@ where
     }
 }
 
+impl <T, A, B, C> AsRef<T> for AnyItem<T, A, B, C>
+where
+    T: 'static,
+    A: 'static,
+    B: 'static,
+    C: 'static,
+{
+    fn as_ref(&self) -> &T {
+        assert!(Self::is_valid());
+        unsafe { mem::transmute(&self.data) }
+    }
+}
+
+impl <T, A, B, C> AsMut<T> for AnyItem<T, A, B, C>
+where
+    T: 'static,
+    A: 'static,
+    B: 'static,
+    C: 'static,
+{
+    fn as_mut(&mut self) -> &mut T {
+        assert!(Self::is_valid());
+        unsafe { mem::transmute(&mut self.data) }
+    }
+}
+
+
 impl<T, A, B, C> Deref for AnyItem<T, A, B, C> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
@@ -157,7 +184,8 @@ where
         self.data.pop().map(|i| AnyItem::<T, A, B, C>::from_inner(i).into())
     }
     
-    pub fn reset<U>(mut self) -> AnyVec<U, A, B, C> where U: 'static {
+    //@TODO: change_type() or clear_type() ?
+    pub fn change_type<U>(mut self) -> AnyVec<U, A, B, C> where U: 'static {
         assert!(AnyVec::<U, A, B, C>::is_valid());
         self.data.clear();
         
