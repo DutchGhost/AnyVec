@@ -138,13 +138,23 @@ pub struct AnyVec<T, A, B, C> {
 impl<T, A, B, C> Deref for AnyVec<T, A, B, C> {
     type Target = [AnyItem<T, A, B, C>];
     fn deref(&self) -> &Self::Target {
-        let slice: &[AnyInner<A, B, C>] = &self.data[..];
+        let slice: &[AnyInner<A, B, C>] = self.data.as_ref();
         unsafe {
             // AnyItem is just a wrapper around AnyItem, so this is safe.
             mem::transmute(slice)
         }
     }
 }
+
+impl<T, A, B, C> DerefMut for AnyVec<T, A, B, C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        let slice: &mut [AnyInner<A, B, C>] = self.data.as_mut();
+        unsafe {
+            mem::transmute(slice)
+        }
+    }
+}
+
 
 impl<T, A, B, C> AnyVec<T, A, B, C>
 where
