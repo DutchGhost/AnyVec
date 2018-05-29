@@ -5,12 +5,27 @@ use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::fmt;
 
 /// This union is used by the [`AnyVec`] struct, to hold the current data-type.
+//@TODO: impl drop?
 pub union AnyInner<A, B, C> {
     pub a: A,
     pub b: B,
     pub c: C
 }
 
+impl <A, B, C> Clone for AnyInner<A, B, C>
+where
+    A: Clone,
+    B: Clone,
+    C: Clone,
+{
+    fn clone(&self) -> Self {
+        unsafe {
+            match self {
+                AnyInner { a } => AnyInner { a: a.clone() }
+            }
+        }
+    }
+}
 impl <A, B, C> AnyInner<A, B, C> {
     
     /// Gets out the contained data-type.
@@ -365,12 +380,12 @@ where
     }
 
     /// Pops the first item of the underlying vector. Returns `None` if the vector is empty.
+    //@TODO: i.select(), or `AnyItem::<T, A, B, C>::from_inner(i).into()`?
     #[inline]
     pub fn pop(&mut self) -> Option<T> {
-        self.data.pop().map(|i| AnyItem::<T, A, B, C>::from_inner(i).into())
+        self.data.pop().map(|i| i.select())
     }
     
-    //@TODO: change_type() or clear_type() ?
     /// Returns a new instance of `AnyVec<U, A, B, C>` by clearing the current vector, leaving the allocated space untouched.
     /// It returns a new `AnyVec<U, A, B, C>`, that can now hold a different data-type.
     /// # Examples
@@ -401,6 +416,7 @@ where
     /// assert_eq!(changed.pop(), Some(10));
     /// 
     /// ```
+    //@TODO: change_type() or clear_type() ?
     #[inline]
     pub fn change_type<U>(mut self) -> AnyVec<U, A, B, C> where U: 'static {
         assert!(AnyVec::<U, A, B, C>::is_valid());
@@ -412,7 +428,8 @@ where
         }
     }
 
-    /// This function calls the closure for each element, changing the datatype in place.
+    /// This function calls the closure for each element, changing the current datatype in place.
+    /// This does not allocate new space.
     /// The new datatype must be a type specified at creation of the AnyVec, otherwise this function will panic.
     /// # Examples
     /// ```
@@ -467,12 +484,32 @@ where
     }
 }
 
+#[macro_export]
+macro_rules! anyvec {
+    //@TODO: fix this macro, so one can write: anyvec![10, 10];
+    ($elem:expr; $n:expr) => (
+        AnyVec {
+            data: vec![$crate::AnyItem::from($elem).into_inner(), $n],
+            marker: $crate::std::marker::PhantomData,
+        }
+    );
+
+    ($($elem:expr,)*) => (
+        AnyVec {
+            data: vec![$($crate::AnyItem::from($elem).into_inner()),*],
+            marker: $crate::std::marker::PhantomData,
+        }
+    );
+
+    ($($elem:expr),*) => ( anyvec!($($elem,)*))
+}
+
 #[cfg(test)]
 mod tests {
+    use AnyVec;
+
     #[test]
     fn test_map() {
-        use AnyVec;
-
         let mut vec = AnyVec::<&str, &str, Result<u32, ()>, ()>::new();
 
         vec.push("10");
@@ -480,7 +517,7 @@ mod tests {
         vec.push("30");
         vec.push("40");
 
-        let mut changed = vec.map(|s| s.parse::<u32>().map_err(|_| ()) );
+        let changed = vec.map(|s| s.parse::<u32>().map_err(|_| ()) );
 
         let mut iter = changed.into_iter();
 
@@ -488,5 +525,17 @@ mod tests {
         assert_eq!(iter.next(), Some(Ok(20)));
         assert_eq!(iter.next(), Some(Ok(30)));
         assert_eq!(iter.next(), Some(Ok(40)));
+    }
+
+    #[test]
+    fn test_macro() {
+        let mut v: AnyVec<u32, u32, &str, ()> = anyvec![10u32, 20u32, 30u32, 40u32,];
+        assert_eq!(v.pop(), Some(40));
+        assert_eq!(v.pop(), Some(30));
+        assert_eq!(v.pop(), Some(20));
+        assert_eq!(v.pop(), Some(10));
+        assert_eq!(v.pop(), None);
+        
+        //let mut v2: AnyVec<u32, u32, &str, ()> = anyvec![10; 10];
     }
 }
