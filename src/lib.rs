@@ -98,7 +98,7 @@ where
         let a_id = TypeId::of::<A>();
         let b_id = TypeId::of::<B>();
         let c_id = TypeId::of::<C>();
-        t_id == a_id || t_id == b_id || c_id == c_id
+        t_id == a_id || t_id == b_id || t_id == c_id
     }
 
     /// Creates a new instance from `T`.
@@ -390,15 +390,15 @@ where
     /// # Panic
     /// Trying to change to a datatype that is not specified at creation, is not allowed, and will result in a panic!():
     /// 
-    /// ```
+    /// ```comptime_fail
     /// use anyvec::AnyVec;
     /// let mut anyvec = AnyVec::<char, char, u8, String>::new();
     /// 
     /// anyvec.push('a');
     /// 
-    /// let mut changed = anyvec.change_type::<[u64; 2]>();
-    /// changed.push([10; 2]);
-    /// assert_eq!(changed.pop(), Some([10; 2]));
+    /// let mut changed = anyvec.change_type::<u64>();
+    /// changed.push(10);
+    /// assert_eq!(changed.pop(), Some(10));
     /// 
     /// ```
     #[inline]
@@ -412,6 +412,39 @@ where
         }
     }
 
+    /// This function calls the closure for each element, changing the datatype in place.
+    /// The new datatype must be a type specified at creation of the AnyVec, otherwise this function will panic.
+    /// # Examples
+    /// ```
+    /// use anyvec::AnyVec;
+    /// 
+    /// let mut vec = AnyVec::<&str, &str, Result<u32, ()>, u32>::new();
+    /// 
+    /// vec.push("10");
+    /// vec.push("20");
+    /// vec.push("30");
+    /// vec.push("40");
+    /// 
+    /// let mut changed = vec.map(|s| s.parse::<u32>().map_err(|_| ()) );
+    /// 
+    /// {
+    ///     let mut iter = changed.iter();
+    /// 
+    ///     assert_eq!(iter.next(), Some(&Ok(10)));
+    ///     assert_eq!(iter.next(), Some(&Ok(20)));
+    ///     assert_eq!(iter.next(), Some(&Ok(30)));
+    ///     assert_eq!(iter.next(), Some(&Ok(40)));
+    /// }
+    /// 
+    /// let mut final_change = changed.map(|r| r.unwrap());
+    /// 
+    /// let mut iter = final_change.iter();
+    /// assert_eq!(iter.next(), Some(&10));
+    /// assert_eq!(iter.next(), Some(&20));
+    /// assert_eq!(iter.next(), Some(&30));
+    /// assert_eq!(iter.next(), Some(&40));
+    /// 
+    /// ```
     #[inline]
     pub fn map<U, F>(self, f: F) -> AnyVec<U, A, B, C> where U: 'static, F: Fn(T) -> U
     {
@@ -431,5 +464,29 @@ where
             data.set_len(len);
         }
         AnyVec { data, marker: PhantomData }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_map() {
+        use AnyVec;
+
+        let mut vec = AnyVec::<&str, &str, Result<u32, ()>, ()>::new();
+
+        vec.push("10");
+        vec.push("20");
+        vec.push("30");
+        vec.push("40");
+
+        let mut changed = vec.map(|s| s.parse::<u32>().map_err(|_| ()) );
+
+        let mut iter = changed.into_iter();
+
+        assert_eq!(iter.next(), Some(Ok(10)));
+        assert_eq!(iter.next(), Some(Ok(20)));
+        assert_eq!(iter.next(), Some(Ok(30)));
+        assert_eq!(iter.next(), Some(Ok(40)));
     }
 }
