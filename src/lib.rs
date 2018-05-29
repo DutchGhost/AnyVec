@@ -4,13 +4,38 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::fmt;
 
+/// This union is used by the [`AnyVec`] struct, to hold the current data-type.
 pub union AnyInner<A, B, C> {
-    a: A,
-    b: B,
-    c: C
+    pub a: A,
+    pub b: B,
+    pub c: C
 }
 
 impl <A, B, C> AnyInner<A, B, C> {
+    
+    /// Gets out the contained data-type.
+    /// # Examples
+    /// ```
+    /// extern crate anyvec;
+    /// use anyvec::AnyInner;
+    /// 
+    /// fn main() {
+    ///     let mut inner: AnyInner<String, i32, char> = AnyInner { b: 10i32 };
+    /// 
+    ///     assert_eq!(inner.select::<i32>(), 10);
+    /// }
+    /// ```
+    /// 
+    /// # Safety
+    /// It should be noted that selecting a type that is not current value, results in Undefined Behaviour.
+    /// # Example
+    /// ```compile_fail
+    /// fn main() {
+    ///     let mut inner: AnyInner<String, i32, char> = AnyInner { b: 10i32 };
+    /// 
+    ///     assert_eq!(inner.select::<String>(), 10);
+    /// }
+    /// ```
     #[inline]
     pub fn select<T>(mut self) -> T
     where
@@ -42,6 +67,7 @@ impl <T, A, B, C> AsMut<T> for AnyInner<A, B, C> {
     }
 }
 
+/// This struct is used by ['AnyVec'], and knows statically what the current data-type is
 pub struct AnyItem<T, A, B, C> {
     data: AnyInner<A, B, C>,
     marker: PhantomData<T>
@@ -64,6 +90,7 @@ where
     B: 'static,
     C: 'static
 {
+    /// Checks if at least one of the types of A, B and C is equal to the type of T.
     #[inline]
     fn is_valid() -> bool {
         use std::any::TypeId;
@@ -74,6 +101,7 @@ where
         t_id == a_id || t_id == b_id || c_id == c_id
     }
 
+    /// Creates a new instance from `T`.
     #[inline]
     pub fn from(t: T) -> Self {
         assert!(Self::is_valid());
@@ -84,6 +112,7 @@ where
         }
     }
 
+    /// Converts back to a 'T'.
     #[inline]
     pub fn into(mut self) -> T {
         unsafe {
@@ -93,11 +122,13 @@ where
         }
     }
 
+    /// Returns the underlying `AnyInner`.
     #[inline]
     pub fn into_inner(self) -> AnyInner<A, B, C> {
         self.data
     }
 
+    /// Creates a new instance from a `AnyInner`.
     #[inline]
     pub fn from_inner(data: AnyInner<A, B, C>) -> Self {
         assert!(Self::is_valid());
@@ -211,11 +242,15 @@ where
     B: 'static,
     C: 'static
 {
+    /// Checks if any of the types A, B or C is equal the type of T.
     #[inline]
     pub fn is_valid() -> bool {
         AnyItem::<T, A, B, C>::is_valid()
     }
-    
+
+    /// Constructs a new, empty `AnyVec<T, A, B, C>`.
+    /// 
+    /// The underlying vector will not allocate until elements are push onto it.
     #[inline]
     pub fn new() -> Self {
         assert!(Self::is_valid());
@@ -225,6 +260,7 @@ where
         }
     }
 
+    /// Creates a new, empty `AnyVec<T, A, B, C>`, with the specified capacity.
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         assert!(Self::is_valid());
@@ -235,11 +271,13 @@ where
         }
     }
 
+    /// Returns the number of elements the underlying vector can hold without reallocating.
     #[inline]
     pub fn capacity(&self) -> usize {
         self.data.capacity()
     }
 
+    /// Reserves the minimum capacity for exactly `additional` more elements in the given `AnyVec<T, A, B, C>`.
     #[inline]
     pub fn reserve(&mut self, additional: usize) {
         self.data.reserve(additional);
@@ -308,28 +346,61 @@ where
         self.data.push(AnyItem::from(item).into_inner())
     }
     
-
+    /// Returns an Iterator over the current held data-type.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.data.iter().map(|i| unsafe { mem::transmute(i)})
     }
 
+    /// Returns an Iterator over the current held data-type that allows mutation.
     #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.data.iter_mut().map(|i| unsafe { mem::transmute(i)})
     }
 
+    /// Returns an Iterator over the owned items, consuming `self`.
     #[inline]
     pub fn into_iter(self) -> impl Iterator<Item = T> {
         self.data.into_iter().map(|i| i.select())
     }
 
+    /// Pops the first item of the underlying vector. Returns `None` if the vector is empty.
     #[inline]
     pub fn pop(&mut self) -> Option<T> {
         self.data.pop().map(|i| AnyItem::<T, A, B, C>::from_inner(i).into())
     }
     
     //@TODO: change_type() or clear_type() ?
+    /// Returns a new instance of `AnyVec<U, A, B, C>` by clearing the current vector, leaving the allocated space untouched.
+    /// It returns a new `AnyVec<U, A, B, C>`, that can now hold a different data-type.
+    /// # Examples
+    /// ```
+    /// use anyvec::AnyVec;
+    /// let mut anyvec = AnyVec::<char, char, u8, String>::new();
+    /// 
+    /// anyvec.push('a');
+    /// 
+    /// let mut changed = anyvec.change_type::<String>();
+    /// 
+    /// changed.push(String::from("foo"));
+    /// 
+    /// assert_eq!(changed.pop(), Some(String::from("foo")));
+    /// ```
+    /// 
+    /// # Panic
+    /// Trying to change to a datatype that is not specified at creation, is not allowed, and will result in a panic!():
+    /// 
+    /// ```
+    /// use anyvec::AnyVec;
+    /// let mut anyvec = AnyVec::<char, char, u8, String>::new();
+    /// 
+    /// anyvec.push('a');
+    /// 
+    /// let mut changed = anyvec.change_type::<[u64; 2]>();
+    /// changed.push([10; 2]);
+    /// assert_eq!(changed.pop(), Some([10; 2]));
+    /// 
+    /// ```
     #[inline]
     pub fn change_type<U>(mut self) -> AnyVec<U, A, B, C> where U: 'static {
         assert!(AnyVec::<U, A, B, C>::is_valid());
