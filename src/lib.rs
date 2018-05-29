@@ -113,12 +113,16 @@ impl<T, A, B, C> AnyVec<T, A, B, C> where T: 'static, A: 'static, B: 'static, C:
         self.data.push(AnyItem::from(item).into_inner())
     }
     
-    pub fn iter(&self) -> impl Iterator<Item = &AnyItem<T, A, B, C>> {
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.data.iter().map(|i| unsafe { mem::transmute(i)})
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut AnyItem<T, A, B, C>> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.data.iter_mut().map(|i| unsafe { mem::transmute(i)})
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = T> {
+        self.data.into_iter().map(|i| AnyItem::<T, A, B, C>::from_inner(i).into())
     }
 
     pub fn pop(&mut self) -> Option<AnyItem<T, A, B, C>> {
