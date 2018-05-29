@@ -10,6 +10,15 @@ pub union AnyInner<A, B, C> {
     c: C
 }
 
+impl <A, B, C> AnyInner<A, B, C> {
+    pub fn select<T>(mut self) -> T {
+        unsafe {
+            let t = ptr::read(&mut self as *mut _ as *mut T);
+            mem::forget(self);
+            t
+        }
+    }
+}
 pub struct AnyItem<T, A, B, C> {
     data: AnyInner<A, B, C>,
     _m: PhantomData<T>
@@ -122,11 +131,11 @@ impl<T, A, B, C> AnyVec<T, A, B, C> where T: 'static, A: 'static, B: 'static, C:
     }
 
     pub fn into_iter(self) -> impl Iterator<Item = T> {
-        self.data.into_iter().map(|i| AnyItem::<T, A, B, C>::from_inner(i).into())
+        self.data.into_iter().map(|i| i.select())
     }
 
-    pub fn pop(&mut self) -> Option<AnyItem<T, A, B, C>> {
-        self.data.pop().map(|i| AnyItem::from_inner(i))
+    pub fn pop(&mut self) -> Option<T> {
+        self.data.pop().map(|i| AnyItem::<T, A, B, C>::from_inner(i).into())
     }
     
     pub fn reset<U>(mut self) -> AnyVec<U, A, B, C> where U: 'static {
