@@ -91,7 +91,7 @@ impl <T, A, B, C> AsMut<T> for AnyInner<A, B, C> {
     }
 }
 
-/// This struct is used by ['AnyVec'], and knows statically what the current data-type is
+/// This struct is used by [`AnyVec`], and knows statically what the current data-type is
 pub struct AnyItem<T, A, B, C> {
     data: AnyInner<A, B, C>,
     marker: PhantomData<T>
@@ -229,6 +229,11 @@ impl <T, A, B, C> DerefMut for AnyItem<T, A, B, C> {
     }
 }
 
+/// A vector that can change types, with minimal runtime costs.
+/// The current data-type is  defined by `T`,
+/// and the data-types it can change to are `A`, `B` and `C`.
+///
+/// `T` always has to be one of `A`, `B` or `C`.
 pub struct AnyVec<T, A, B, C> {
     data: Vec<AnyInner<A, B, C>>,
     marker: PhantomData<T>
@@ -290,7 +295,7 @@ where
 
     /// Constructs a new, empty `AnyVec<T, A, B, C>`.
     ///
-    /// The underlying vector will not allocate until elements are push onto it.
+    /// The underlying vector will not allocate until elements are pushed onto it (see [`AnyVec::push()`]).
     #[inline]
     pub fn new() -> Self {
         assert!(Self::is_valid());
@@ -381,6 +386,22 @@ where
         self.data.retain(f)
     }
 
+    /// Pushes a new element to the vector.
+    /// # Examples
+    /// ```
+    /// use anyvec::AnyVec;
+    /// let mut v: AnyVec::<u32, u32, char, ()> = AnyVec::new();
+    /// v.push(10);
+    /// assert_eq!(v[0], 10);
+    /// ```
+    /// # Panic
+    /// Trying to push an item that is not the current held data-type, will not compile:
+    /// ```compile_fail
+    /// use anyvec::AnyVec;
+    /// let mut v: AnyVec::<u32, u32, char, ()> = AnyVec::new();
+    /// v.push('f');
+    /// assert_eq!(v[0], 10)
+    ///```
     #[inline]
     pub fn push(&mut self, item: T) {
         self.data.push(AnyItem::from(item).into_inner())
