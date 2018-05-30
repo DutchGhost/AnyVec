@@ -1,9 +1,13 @@
 #![feature(untagged_unions)]
+#![feature(const_fn)]
+#![feature(const_type_id)]
+
 use std::{mem, ptr};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::fmt;
 
+pub mod selectvec;
 /// This union is used by the [`AnyVec`] struct, to hold the current data-type.
 //@TODO: impl drop?
 pub union AnyInner<A, B, C> {
