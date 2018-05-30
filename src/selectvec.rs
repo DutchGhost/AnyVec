@@ -81,7 +81,7 @@ pub trait ReverseSelect<Mapped> {
     type Original;
 }
 
-macro_rules! convertion {
+macro_rules! conversion {
     ($select_type:ty, $real_type:ty) => {
         impl ReverseSelect<$select_type> for $real_type {
             type Original = $select_type;
@@ -368,9 +368,9 @@ mod tests {
         use super::*;
         let mut vec = SelectVec::<u16, u16, Result<u32, ()>, u32>::new();
         
-        convertion!(A, u16);
-        convertion!(B, Result<u32, ()>);
-        convertion!(C, u32);
+        conversion!(A, u16);
+        conversion!(B, Result<u32, ()>);
+        conversion!(C, u32);
         
         vec.push(10);
         vec.push(20);
