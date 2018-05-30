@@ -301,9 +301,9 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     ///
     /// ```
     #[inline]
-    pub fn map<U, S: Selector>(self, f: impl Fn(T) -> U) -> SelectVec<U, A, B, C>
+    pub fn map<U, S: Selector, F: Fn(T) -> U>(self, f: F) -> SelectVec<U, A, B, C>
     where
-        (A, B, C): Select<S, Output = U>
+        (A, B, C): Select<S, Output = F::Output>
     {
         let SelectVec { mut data, ..} = self;
 
@@ -325,5 +325,26 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
         }
 
         SelectVec {data, marker: PhantomData}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn wtf() {
+        use super::*;
+        let mut vec = SelectVec::<&str, &str, Result<u32, ()>, u32>::new();
+        vec.push::<A>("10");
+        vec.push::<A>("20");
+        vec.push::<A>("30");
+        vec.push::<A>("40");
+        let mut changed = vec.map::<u32, C>(|s| s.parse::<u32>().unwrap() );
+        {
+            let mut iter = changed.iter();
+            assert_eq!(iter.next(), Some(&10));
+            assert_eq!(iter.next(), Some(&20));
+            assert_eq!(iter.next(), Some(&30));
+            assert_eq!(iter.next(), Some(&40));
+        }
     }
 }

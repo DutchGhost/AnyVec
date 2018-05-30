@@ -1,11 +1,11 @@
-#![feature(untagged_unions)]
 #![feature(const_fn)]
 #![feature(const_type_id)]
+#![feature(untagged_unions)]
 
+use std::fmt;
 use std::{mem, ptr};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
-use std::fmt;
 
 pub mod selectvec;
 /// This union is used by the [`AnyVec`] struct, to hold the current data-type.
