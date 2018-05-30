@@ -45,13 +45,8 @@ where
     }
 }
 
-#[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
 pub struct A;
-
-#[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
 pub struct B;
-
-#[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
 pub struct C;
 
 pub trait Selector {}
@@ -72,7 +67,7 @@ impl <AA, BB, CC> Select<A> for (AA, BB, CC) {
 }
 
 impl <AA, BB, CC> Select<B> for (AA, BB, CC) {
-    type Output = B;
+    type Output = BB;
 }
 
 impl <AA, BB, CC> Select<C> for (AA, BB, CC) {
@@ -82,12 +77,12 @@ impl <AA, BB, CC> Select<C> for (AA, BB, CC) {
 impl <A, B, C> SelectUnion<A, B, C>
 {
     #[inline]
-    pub fn select<S: Selector, T>(mut self) -> T
+    pub fn select<S: Selector>(mut self) -> <(A, B, C) as Select<S>>::Output
     where
-        (A, B, C): Select<S, Output = T>
+        (A, B, C): Select<S>
     {
         unsafe {
-            let t = ptr::read(&mut self as *mut _ as *mut T);
+            let t = ptr::read(&mut self as *mut _ as *mut <(A, B, C) as Select<S>>::Output);
             mem::forget(self);
             t
         }
@@ -123,6 +118,7 @@ pub struct SelectItem<T, A, B, C>
 }
 
 impl <T, A, B, C> SelectItem<T, A, B, C> {
+    #[inline]
     pub fn from<S: Selector>(t: T) -> Self
     where
         (A, B, C): Select<S, Output = T>
@@ -175,6 +171,7 @@ impl <T, A, B, C> fmt::Debug for SelectItem<T, A, B, C>
 where
     T: fmt::Debug
 {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.as_ref().fmt(f)
     }
@@ -197,6 +194,19 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
         }
     }
 
+    /// Pushes a new element to the vector.
+    /// # Examples
+    /// ```
+    /// use anyvec::selectvec::{SelectVec, A, B, C};
+    /// let mut vec = SelectVec::<char, char, u8, String>::new();
+    ///
+    /// vec.push::<A>('a');
+    /// vec.push::<A>('b');
+    /// 
+    /// assert_eq!(vec.pop::<A>(), Some('b'));
+    /// assert_eq!(vec.pop::<A>(), Some('a'));
+    /// assert_eq!(vec.pop::<A>(), None);
+    ///```
     #[inline]
     pub fn push<S: Selector>(&mut self, item: T)
     where
@@ -210,7 +220,7 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     where
         (A, B, C): Select<S, Output = T>
     {
-        self.data.pop().map(|i| i.select::<S, T>())
+        self.data.pop().map(|i| i.select::<S>())
     }
 
     #[inline]
@@ -228,7 +238,7 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     where
         (A, B, C): Select<S, Output = T>
     {
-        self.data.into_iter().map(|item| item.select::<S, T>())
+        self.data.into_iter().map(|item| item.select::<S>())
     }
     /// Returns a new instance of `AnyVec<U, A, B, C>` by clearing the current vector, leaving the allocated space untouched.
     /// It returns a new `AnyVec<U, A, B, C>`, that can now hold a different data-type.
@@ -255,7 +265,7 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     ///
     /// vec.push::<A>('a');
     ///
-    /// let mut changed = vec.change_type::<B, u64>();
+    /// let mut changed = vec.change_type::<B, _>();
     /// changed.push::<B>(10);
     /// assert_eq!(changed.pop::<B>(), Some(10));
     ///
@@ -287,10 +297,10 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     /// vec.push::<A>("30");
     /// vec.push::<A>("40");
     ///
-    /// let mut changed = vec.map::<Result<u32, ()>, B>(|s| s.parse::<u32>().map_err(|_| ()) );
+    /// let mut result_vec = vec.map::<_, B, _>(|s| s.parse::<u32>().map_err(|_| ()) );
     ///
     /// {
-    ///     let mut iter = changed.iter();
+    ///     let mut iter = result_vec.iter();
     ///
     ///     assert_eq!(iter.next(), Some(&Ok(10)));
     ///     assert_eq!(iter.next(), Some(&Ok(20)));
@@ -298,12 +308,19 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     ///     assert_eq!(iter.next(), Some(&Ok(40)));
     /// }
     ///
-    ///
+    /// let mut int_vec = result_vec.map::<_, C, _>(|r| r.unwrap());
+    /// 
+    /// let mut iter = int_vec.into_iter::<C>();
+    /// 
+    /// assert_eq!(iter.next(), Some(10));
+    /// assert_eq!(iter.next(), Some(20));
+    /// assert_eq!(iter.next(), Some(30));
+    /// assert_eq!(iter.next(), Some(40));
     /// ```
     #[inline]
     pub fn map<U, S: Selector, F: Fn(T) -> U>(self, f: F) -> SelectVec<U, A, B, C>
     where
-        (A, B, C): Select<S, Output = F::Output>
+        (A, B, C): Select<S, Output = U>
     {
         let SelectVec { mut data, ..} = self;
 
@@ -334,11 +351,13 @@ mod tests {
     fn wtf() {
         use super::*;
         let mut vec = SelectVec::<&str, &str, Result<u32, ()>, u32>::new();
+        
         vec.push::<A>("10");
         vec.push::<A>("20");
         vec.push::<A>("30");
         vec.push::<A>("40");
-        let mut changed = vec.map::<u32, C>(|s| s.parse::<u32>().unwrap() );
+        
+        let mut changed = vec.map::<_, C, _>(|s| s.parse::<u32>().unwrap() );
         {
             let mut iter = changed.iter();
             assert_eq!(iter.next(), Some(&10));
