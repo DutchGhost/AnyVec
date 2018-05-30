@@ -27,27 +27,27 @@ where
     }
 }
 impl <A, B, C> AnyInner<A, B, C> {
-    
+
     /// Gets out the contained data-type.
     /// # Examples
     /// ```
     /// extern crate anyvec;
     /// use anyvec::AnyInner;
-    /// 
+    ///
     /// fn main() {
     ///     let mut inner: AnyInner<String, i32, char> = AnyInner { b: 10i32 };
-    /// 
+    ///
     ///     assert_eq!(inner.select::<i32>(), 10);
     /// }
     /// ```
-    /// 
+    ///
     /// # Safety
     /// It should be noted that selecting a type that is not current value, results in Undefined Behaviour.
     /// # Example
     /// ```compile_fail
     /// fn main() {
     ///     let mut inner: AnyInner<String, i32, char> = AnyInner { b: 10i32 };
-    /// 
+    ///
     ///     assert_eq!(inner.select::<String>(), 10);
     /// }
     /// ```
@@ -65,6 +65,15 @@ impl <A, B, C> AnyInner<A, B, C> {
             mem::forget(self);
             t
         }
+    }
+
+    /// Does the same as [`AnyInner::select()`], but does not type check.
+    /// Because no type-check happens, this is considered unsafe, and should be used with care!
+    #[inline]
+    pub unsafe fn select_unchecked<T>(mut self) -> T {
+        let t = ptr::read(&mut self as *mut _ as *mut T);
+        mem::forget(self);
+        t
     }
 }
 
@@ -127,6 +136,13 @@ where
         }
     }
 
+    #[inline]
+    pub unsafe fn from_unchecked(t: T) -> Self {
+        let mut s = mem::uninitialized();
+        ptr::write(&mut s as *mut _ as *mut T, t);
+        s
+    }
+
     /// Converts back to a 'T'.
     #[inline]
     pub fn into(mut self) -> T {
@@ -147,6 +163,15 @@ where
     #[inline]
     pub fn from_inner(data: AnyInner<A, B, C>) -> Self {
         assert!(Self::is_valid());
+        AnyItem {
+            data,
+            marker: PhantomData
+        }
+    }
+
+    /// Creates a new instance from a `AnyInner`, but does not type-check.
+    #[inline]
+    pub unsafe fn from_inner_unchecked(data: AnyInner<A, B, C>) -> Self {
         AnyItem {
             data,
             marker: PhantomData
@@ -185,17 +210,17 @@ where
 
 impl<T, A, B, C> Deref for AnyItem<T, A, B, C> {
     type Target = T;
-    
+
     #[inline]
     fn deref(&self) -> &Self::Target {
-        unsafe { 
+        unsafe {
             mem::transmute(&self.data)
         }
     }
 }
 
 impl <T, A, B, C> DerefMut for AnyItem<T, A, B, C> {
-    
+
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
@@ -211,7 +236,7 @@ pub struct AnyVec<T, A, B, C> {
 
 impl<T, A, B, C> Deref for AnyVec<T, A, B, C> {
     type Target = [AnyItem<T, A, B, C>];
-    
+
     #[inline]
     fn deref(&self) -> &Self::Target {
         let slice: &[AnyInner<A, B, C>] = self.data.as_ref();
@@ -223,7 +248,7 @@ impl<T, A, B, C> Deref for AnyVec<T, A, B, C> {
 }
 
 impl<T, A, B, C> DerefMut for AnyVec<T, A, B, C> {
-    
+
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         let slice: &mut [AnyInner<A, B, C>] = self.data.as_mut();
@@ -264,7 +289,7 @@ where
     }
 
     /// Constructs a new, empty `AnyVec<T, A, B, C>`.
-    /// 
+    ///
     /// The underlying vector will not allocate until elements are push onto it.
     #[inline]
     pub fn new() -> Self {
@@ -360,7 +385,7 @@ where
     pub fn push(&mut self, item: T) {
         self.data.push(AnyItem::from(item).into_inner())
     }
-    
+
     /// Returns an Iterator over the current held data-type.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &T> {
@@ -376,52 +401,52 @@ where
     /// Returns an Iterator over the owned items, consuming `self`.
     #[inline]
     pub fn into_iter(self) -> impl Iterator<Item = T> {
-        self.data.into_iter().map(|i| i.select())
+        self.data.into_iter().map(|i| unsafe { i.select_unchecked() } )
     }
 
     /// Pops the first item of the underlying vector. Returns `None` if the vector is empty.
     //@TODO: i.select(), or `AnyItem::<T, A, B, C>::from_inner(i).into()`?
     #[inline]
     pub fn pop(&mut self) -> Option<T> {
-        self.data.pop().map(|i| i.select())
+        self.data.pop().map(|i| unsafe { i.select_unchecked() } )
     }
-    
+
     /// Returns a new instance of `AnyVec<U, A, B, C>` by clearing the current vector, leaving the allocated space untouched.
     /// It returns a new `AnyVec<U, A, B, C>`, that can now hold a different data-type.
     /// # Examples
     /// ```
     /// use anyvec::AnyVec;
     /// let mut anyvec = AnyVec::<char, char, u8, String>::new();
-    /// 
+    ///
     /// anyvec.push('a');
-    /// 
+    ///
     /// let mut changed = anyvec.change_type::<String>();
-    /// 
+    ///
     /// changed.push(String::from("foo"));
-    /// 
+    ///
     /// assert_eq!(changed.pop(), Some(String::from("foo")));
     /// ```
-    /// 
+    ///
     /// # Panic
     /// Trying to change to a datatype that is not specified at creation, is not allowed, and will result in a panic!():
-    /// 
+    ///
     /// ```comptime_fail
     /// use anyvec::AnyVec;
     /// let mut anyvec = AnyVec::<char, char, u8, String>::new();
-    /// 
+    ///
     /// anyvec.push('a');
-    /// 
+    ///
     /// let mut changed = anyvec.change_type::<u64>();
     /// changed.push(10);
     /// assert_eq!(changed.pop(), Some(10));
-    /// 
+    ///
     /// ```
     //@TODO: change_type() or clear_type() ?
     #[inline]
     pub fn change_type<U>(mut self) -> AnyVec<U, A, B, C> where U: 'static {
         assert!(AnyVec::<U, A, B, C>::is_valid());
         self.data.clear();
-        
+
         AnyVec {
             data: self.data,
             marker: PhantomData,
@@ -434,37 +459,42 @@ where
     /// # Examples
     /// ```
     /// use anyvec::AnyVec;
-    /// 
+    ///
     /// let mut vec = AnyVec::<&str, &str, Result<u32, ()>, u32>::new();
-    /// 
+    ///
     /// vec.push("10");
     /// vec.push("20");
     /// vec.push("30");
     /// vec.push("40");
-    /// 
+    ///
     /// let mut changed = vec.map(|s| s.parse::<u32>().map_err(|_| ()) );
-    /// 
+    ///
     /// {
     ///     let mut iter = changed.iter();
-    /// 
+    ///
     ///     assert_eq!(iter.next(), Some(&Ok(10)));
     ///     assert_eq!(iter.next(), Some(&Ok(20)));
     ///     assert_eq!(iter.next(), Some(&Ok(30)));
     ///     assert_eq!(iter.next(), Some(&Ok(40)));
     /// }
-    /// 
+    ///
     /// let mut final_change = changed.map(|r| r.unwrap());
-    /// 
+    ///
     /// let mut iter = final_change.iter();
     /// assert_eq!(iter.next(), Some(&10));
     /// assert_eq!(iter.next(), Some(&20));
     /// assert_eq!(iter.next(), Some(&30));
     /// assert_eq!(iter.next(), Some(&40));
-    /// 
+    ///
     /// ```
     #[inline]
-    pub fn map<U, F>(self, f: F) -> AnyVec<U, A, B, C> where U: 'static, F: Fn(T) -> U
+    pub fn map<U, F>(self, f: F) -> AnyVec<U, A, B, C>
+    where
+        U: 'static,
+        F: Fn(T) -> U
     {
+        assert!(AnyItem::<U, A, B, C>::is_valid());
+
         let AnyVec { mut data, .. } = self;
         unsafe {
             let ptr = data.as_mut_ptr();
@@ -472,10 +502,10 @@ where
             data.set_len(0);
             for i in 0 .. len as isize {
                 let item_ptr = ptr.offset(i);
-                let any_t: AnyItem<T, A, B, C> = AnyItem::from_inner(ptr::read(item_ptr));
+                let any_t: AnyItem<T, A, B, C> = AnyItem::from_inner_unchecked(ptr::read(item_ptr));
                 let t: T = any_t.into();
                 let u: U = f(t);
-                let any_u: AnyItem<U, A, B, C> = AnyItem::from(u);
+                let any_u: AnyItem<U, A, B, C> = AnyItem::from_unchecked(u);
                 ptr::write(item_ptr, any_u.into_inner());
             }
             data.set_len(len);
@@ -535,7 +565,7 @@ mod tests {
         assert_eq!(v.pop(), Some(20));
         assert_eq!(v.pop(), Some(10));
         assert_eq!(v.pop(), None);
-        
+
         //let mut v2: AnyVec<u32, u32, &str, ()> = anyvec![10; 10];
     }
 }
