@@ -59,7 +59,7 @@ impl Selector for B {}
 impl Selector for C {}
 
 /// This trait can be used to 'select' a current type.
-pub trait Select<S> {
+pub trait Select<S: Selector>: {
 
     /// The current selected type.
     type Output;
@@ -287,7 +287,7 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     ///
     /// ```
     #[inline]
-    pub fn change_type<S, U>(mut self) -> SelectVec<U, A, B, C>
+    pub fn change_type<S: Selector, U>(mut self) -> SelectVec<U, A, B, C>
     where
         (A, B, C): Select<S, Output = U>
     {
