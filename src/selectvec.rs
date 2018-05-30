@@ -5,6 +5,9 @@ use std::any::TypeId;
 use std::marker::PhantomData;
 use std::convert::{AsRef, AsMut};
 
+/// A union that holds the items.
+/// This should be used with [`SelectItem`] to safely construct this union,
+/// and get the type out of it.
 pub union SelectUnion<A, B, C> {
     a: A,
     b: B,
@@ -74,6 +77,18 @@ impl <AA, BB, CC> Select<C> for (AA, BB, CC) {
     type Output = CC;
 }
 
+pub trait ReverseSelect<Mapped> {
+    type Original;
+}
+
+macro_rules! convertion {
+    ($select_type:ty, $real_type:ty) => {
+        impl ReverseSelect<$select_type> for $real_type {
+            type Original = $select_type;
+        }
+    }
+}
+
 impl <A, B, C> SelectUnion<A, B, C>
 {
     #[inline]
@@ -103,7 +118,7 @@ impl <T, A, B, C> AsMut<T> for SelectUnion<A, B, C> {
     }
 }
 
-/// Struct to safely to from [`SelectUnion`] to `T`.
+/// Struct to safely convert from [`SelectUnion`] to `T`, and vice versa.
 /// 
 /// # Examples
 /// ```
@@ -210,6 +225,7 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     #[inline]
     pub fn push<S: Selector>(&mut self, item: T)
     where
+        T: ReverseSelect<S, Original = S>,
         (A, B, C): Select<S, Output = T>
     {
         self.data.push(SelectItem::from::<S>(item).into_inner());
@@ -348,22 +364,26 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn wtf() {
+    fn convertion_test() {
         use super::*;
-        let mut vec = SelectVec::<&str, &str, Result<u32, ()>, u32>::new();
+        let mut vec = SelectVec::<u16, u16, Result<u32, ()>, u32>::new();
         
-        vec.push::<A>("10");
-        vec.push::<A>("20");
-        vec.push::<A>("30");
-        vec.push::<A>("40");
+        convertion!(A, u16);
+        convertion!(B, Result<u32, ()>);
+        convertion!(C, u32);
         
-        let mut changed = vec.map::<_, C, _>(|s| s.parse::<u32>().unwrap() );
+        vec.push(10);
+        vec.push(20);
+        vec.push(30);
+        vec.push(40);
+        
+        let mut changed = vec.map::<_, B, _>(|s| Ok(s as u32) );
         {
             let mut iter = changed.iter();
-            assert_eq!(iter.next(), Some(&10));
-            assert_eq!(iter.next(), Some(&20));
-            assert_eq!(iter.next(), Some(&30));
-            assert_eq!(iter.next(), Some(&40));
+            assert_eq!(iter.next(), Some(&Ok(10)));
+            assert_eq!(iter.next(), Some(&Ok(20)));
+            assert_eq!(iter.next(), Some(&Ok(30)));
+            assert_eq!(iter.next(), Some(&Ok(40)));
         }
     }
 }
