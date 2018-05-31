@@ -81,12 +81,13 @@ pub trait ReverseSelect<Mapped> {
     type Original;
 }
 
+#[macro_export]
 macro_rules! conversion {
-    ($select_type:ty, $real_type:ty) => {
+    ($select_type:ty, $real_type:ty) => ({
         impl ReverseSelect<$select_type> for $real_type {
             type Original = $select_type;
         }
-    }
+    });
 }
 
 impl <A, B, C> SelectUnion<A, B, C>
@@ -361,23 +362,39 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     }
 }
 
+// this works
+
+
+#[macro_export]
+macro_rules! SelectVec {
+    ($type1:ty, $type2:ty, $type3:ty) => {
+        {
+            {
+                conversion!(A, $type1);
+                conversion!(B, $type2);
+                conversion!(C, $type3);
+            };
+
+            SelectVec::<$type1, $type1, $type2, $type3>::new()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
     fn convertion_test() {
         use super::*;
-        let mut vec = SelectVec::<u16, u16, Result<u32, ()>, u32>::new();
-        
-        conversion!(A, u16);
-        conversion!(B, Result<u32, ()>);
-        conversion!(C, u32);
+     
+        let mut vec = SelectVec!(u16, Result<u32, ()>, u32);
         
         vec.push(10);
         vec.push(20);
         vec.push(30);
         vec.push(40);
-        
-        let mut changed = vec.map::<_, B, _>(|s| Ok(s as u32) );
+
+
+        let changed = vec.map::<_, B, _>(|s| Ok(s as u32) );
         {
             let mut iter = changed.iter();
             assert_eq!(iter.next(), Some(&Ok(10)));
