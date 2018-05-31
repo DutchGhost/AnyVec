@@ -207,24 +207,28 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
     }
 
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
-        self.data.iter().map(|item| unsafe { mem::transmute(item) })
-    }
-
-    #[inline]
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.data.iter_mut().map(|item| unsafe { mem::transmute(item) })
-    }
-
-    #[inline]
     pub fn into_data(self) -> Vec<D::Union> {
         let data = unsafe { ptr::read(&self.data) };
         mem::forget(self);
         data
     }
 
+    /// Returns a by-reference Iterator over the items contained in the Vector.
     #[inline]
-    pub fn into_iter(mut self) -> impl Iterator<Item = T>
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.data.iter().map(|item| unsafe { mem::transmute(item) })
+    }
+
+    /// Returns a by-mutable-reference Iterator over the items contained in the Vector.
+    /// This allows for mutation.
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.data.iter_mut().map(|item| unsafe { mem::transmute(item) })
+    }
+
+    /// Returns a by-value Iterator over the items contained in the Vector.
+    #[inline]
+    pub fn into_iter(self) -> impl Iterator<Item = T>
     {
         self.into_data().into_iter().map(|i| unsafe {
             let item = SelectItem::<T, D>::from_inner(i);
@@ -232,6 +236,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         })
     }
 
+    /// Returns a draining Iterator, consuming the range of items specified.
     #[inline]
     pub fn drain<'a, R>(&'a mut self, r: R) -> impl Iterator<Item = T> + 'a
     where
@@ -348,7 +353,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         F: Fn(T) -> Option<<D as Select<S>>::Output>
     {
         let mut data = self.into_data();
-        let mut failures: isize = 0;
+        let mut failures: usize = 0;
 
         unsafe {
             let ptr = data.as_mut_ptr();
@@ -358,7 +363,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
 
             for i in 0..len as isize {
                 let read_ptr: *mut D::Union = ptr.offset(i);
-                let write_ptr: *mut D::Union = ptr.offset(i - failures);
+                let write_ptr: *mut D::Union = ptr.offset(i - failures as isize);
                 let any_t: SelectItem<T, D> = SelectItem::from_inner(ptr::read(read_ptr));
                 let t: T = any_t.into();
                 let u = match f(t) {
@@ -374,7 +379,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
                 ptr::write(write_ptr, any_u.into_inner());
             }
 
-            data.set_len(len - failures as usize);
+            data.set_len(len - failures);
         }
 
         SelectVec {data, marker: PhantomData}
