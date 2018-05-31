@@ -219,10 +219,16 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
     #[inline]
     pub fn into_iter(self) -> impl Iterator<Item = T>
     {
-        self.data.into_iter().map(|i| unsafe {
+        let data: Vec<D::Union>  = unsafe { ptr::read(&self.data as *const _) };
+        
+        mem::forget(self);
+
+        let iter = data.into_iter().map(|i| unsafe {
             let item = SelectItem::<T, D>::from_inner(i);
             item.into()
-        })
+        });
+
+        iter
     }
 
     #[inline]
