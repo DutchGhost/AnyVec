@@ -171,7 +171,11 @@ where
 }
 
 /// A Vector that can hold multiple data-types, and switch to those data-types, without losing its allocated space.
-pub struct SelectVec<T, D> where D: TypeUnion {
+pub struct SelectVec<T, D>
+where
+    T: 'static,
+    D: TypeUnion
+{
     data: Vec<D::Union>,
     marker: PhantomData<T>
 }
@@ -213,9 +217,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
     }
 
     #[inline]
-    pub fn into_iter<S>(self) -> impl Iterator<Item = T>
-    where
-        D: Select<S>, S: Selector
+    pub fn into_iter(self) -> impl Iterator<Item = T>
     {
         self.data.into_iter().map(|i| unsafe {
             let item = SelectItem::<T, D>::from_inner(i);
@@ -224,10 +226,8 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
     }
 
     #[inline]
-    pub fn drain<'a, S, R>(&'a mut self, r: R) -> impl Iterator<Item = T> + 'a
+    pub fn drain<'a, R>(&'a mut self, r: R) -> impl Iterator<Item = T> + 'a
     where
-        D: Select<S>,
-        S: Selector,
         R: ::std::ops::RangeBounds<usize>
     {
         self.data.drain(r).map(move |i| unsafe {
@@ -331,6 +331,16 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         }
 
         SelectVec {data, marker: PhantomData}
+    }
+}
+
+impl <T, D> Drop for SelectVec<T, D>
+where
+    D: TypeUnion
+{
+    fn drop(&mut self)
+    {
+        for _ in self.drain(..) {}
     }
 }
 
