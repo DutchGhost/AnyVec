@@ -1,6 +1,7 @@
 use std::ptr;
 use std::mem;
 use std::fmt;
+use std::iter;
 use std::any::TypeId;
 use std::marker::PhantomData;
 use std::convert::{AsRef, AsMut};
@@ -23,12 +24,25 @@ pub const fn type_id<T: 'static>() -> TypeId {
 }
 
 pub unsafe trait TypeSelect<U: TypeUnion> : Sized {
+    
+    /// Casts `self` to `T`.
+    /// This should only be used in context with [`Union3`],
+    /// to safely cast the union into its current held datatype.
+    /// 
+    /// # Panic
+    /// 
+    /// When a cast to a datatype happens, that is not part of the Union,
+    /// this function will panic.
+    #[inline]
     unsafe fn cast<T>(self) -> T where T: 'static {
-        assert!(U::contains::<T>());
+        debug_assert!(U::contains::<T>());
         let mut s = mem::uninitialized();
         ptr::write(&mut s as *mut _ as *mut Self, self);
         s
     }
+
+    /// Casts `self` into a [`SelectItem`].
+    #[inline]
     unsafe fn select<S>(self) -> SelectItem<<U as Select<S>>::Output, U> 
         where S: Selector, U: Select<S>
     {
@@ -41,7 +55,7 @@ unsafe impl<A, B, C> TypeSelect<(A, B, C)> for Union3<A, B, C>
 
 /// This trait is used to check at runtime whether any type `T` equals one of a sequence of other types.
 /// Part of this check can happen during compilation, since we know the types of `T` and the sequence at compile time,
-/// the only part at runtime is comparison
+/// the only part at runtime is the comparison.
 pub trait TypeUnion: Sized + 'static {
     type Union: TypeSelect<Self>;
 
@@ -58,6 +72,7 @@ where
 {
     type Union = Union3<A, B, C>;
 
+    #[inline]
     fn contains<T: 'static>() -> bool {
         contains_type!(T, [A, B, C])
     }
@@ -72,14 +87,15 @@ pub struct B;
 #[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
 pub struct C;
 
+/// Helper trait to index into a tuple of Generics.
 pub trait Selector {}
 
 impl Selector for A {}
 impl Selector for B {}
 impl Selector for C {}
 
-/// This trait can be used to 'select' a current type.
-pub trait Select<S> {
+/// Helper trait to 'select' a generic type out of a tuple of Generics.
+pub trait Select<S: Selector> {
 
     /// The current selected type.
     type Output: 'static;
@@ -111,19 +127,28 @@ pub struct SelectItem<T, D: TypeUnion>
     marker: PhantomData<T>,
 }
 
-impl<T, D> SelectItem<T, D> where D: TypeUnion, T: 'static {
+impl<T, D> SelectItem<T, D>
+where
+    T: 'static,
+    D: TypeUnion,
+{    
+    /// Creates a new `SelectItem<T, D>` from a `T`
+    #[inline]
     pub fn from<S>(t: T) -> SelectItem<T, D>
         where S: Selector, D: Select<S, Output=T>,
     {   
         unsafe { Self::from_unchecked(t) }
     }
 
+    #[inline]
     pub unsafe fn from_unchecked(t: T) -> Self
     {
         let mut s = mem::uninitialized();
         ptr::write(&mut s as *mut _ as *mut T, t);
         s
     }
+
+    /// Converts `self` back into `T`.
     #[inline]
     pub fn into(mut self) -> T {
         unsafe {
@@ -133,11 +158,13 @@ impl<T, D> SelectItem<T, D> where D: TypeUnion, T: 'static {
         }
     }
 
+    /// Returns the Union contained.
     #[inline]
     pub fn into_inner(self) -> D::Union {
         self.data
     }
 
+    /// Creates a new `SelectItem` from A Union.
     #[inline]
     pub unsafe fn from_inner(data: D::Union) -> Self {
         SelectItem {
@@ -191,6 +218,18 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         }
     }
 
+    /// Returns the length of the underlying Vector.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Returns the capacity of the underlying Vector.
+    #[inline]
+    pub fn capacity(&self) -> usize {
+        self.data.capacity()
+    }
+    /// Pushes an item onto the underlying Vector
     #[inline]
     pub fn push(&mut self, item: T)
     {
@@ -198,6 +237,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         self.data.push(item.into_inner());
     }
     
+    /// Pops the last pushed item from the underlying Vector.
     #[inline]
     pub fn pop(&mut self) -> Option<T>
     {
@@ -206,6 +246,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         })
     }
 
+    /// Consumes self, returning the underlying Vector.
     #[inline]
     pub fn into_data(self) -> Vec<D::Union> {
         let data = unsafe { ptr::read(&self.data) };
@@ -273,7 +314,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
     ///
     /// vec.push('a');
     ///
-    /// let mut changed = vec.change_type::<B>();
+    /// let mut changed = vec.change_type::<C>();
     /// changed.push(10);
     /// assert_eq!(changed.pop(), Some(10));
     ///
@@ -318,6 +359,9 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
     ///
     ///
     /// ```
+    /// 
+    /// # Safety
+    /// If the closure panics, the internal vector is leaked.
     #[inline]
     pub fn map<S: Selector, F>(self, f: F) -> SelectVec<<D as Select<S>>::Output, D>
     where
@@ -396,6 +440,24 @@ where
     }
 }
 
+impl <T, D> iter::FromIterator<T> for SelectVec<T, D>
+where
+    T: 'static,
+    D: TypeUnion,
+{
+    #[inline]
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let data = iter.into_iter().map(|item| unsafe {
+            SelectItem::<T, D>::from_unchecked(item).into_inner()
+        }).collect();
+
+        SelectVec {
+            data,
+            marker: PhantomData
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -418,5 +480,16 @@ mod tests {
             assert_eq!(iter.next(), Some(&Ok(30)));
             assert_eq!(iter.next(), Some(&Ok(40)));
         }
+    }
+
+    #[test]
+    fn select_wrong_type() {
+        use super::*;
+        
+        let mut vec = SelectVec::<char, (char, u8, String)>::new();
+        vec.push('a');
+        let mut changed = vec.map::<B, _>(|c| c as u8);
+        changed.push(10);
+        assert_eq!(changed.pop(), Some(10));
     }
 }
