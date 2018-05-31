@@ -348,7 +348,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         F: Fn(T) -> Option<<D as Select<S>>::Output>
     {
         let mut data = self.into_data();
-        let mut failures: usize = 0;
+        let mut failures: isize = 0;
 
         unsafe {
             let ptr = data.as_mut_ptr();
@@ -357,8 +357,9 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
             data.set_len(0);
 
             for i in 0..len as isize {
-                let item_ptr: *mut D::Union = ptr.offset(i - failures as isize);
-                let any_t: SelectItem<T, D> = SelectItem::from_inner(ptr::read(item_ptr));
+                let read_ptr: *mut D::Union = ptr.offset(i);
+                let write_ptr: *mut D::Union = ptr.offset(i - failures);
+                let any_t: SelectItem<T, D> = SelectItem::from_inner(ptr::read(read_ptr));
                 let t: T = any_t.into();
                 let u = match f(t) {
                     Some(item) => item,
@@ -370,10 +371,10 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
                     }
                 };
                 let any_u: SelectItem<<D as Select<S>>::Output, D> = SelectItem::from_unchecked(u);
-                ptr::write(item_ptr, any_u.into_inner());
+                ptr::write(write_ptr, any_u.into_inner());
             }
 
-            data.set_len(len - failures);
+            data.set_len(len - failures as usize);
         }
 
         SelectVec {data, marker: PhantomData}
