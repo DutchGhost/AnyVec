@@ -48,15 +48,17 @@ where
     }
 }
 
-pub struct A;
-pub struct B;
-pub struct C;
-
+/// Helper trait for the [`Select`] trait.
+/// This trait is used to mark a struct,
+/// so it can be use in context with [`struct@SelectVec`] .
 pub trait Selector {}
 
-impl Selector for A {}
-impl Selector for B {}
-impl Selector for C {}
+/// Helper trait to convince rustc we don't need to pass in generic structs into the methods of [`struct@SelectVec`],
+/// since it can infer the types.
+pub trait ReverseSelect<Mapped> {
+    type Original;
+}
+
 
 /// This trait can be used to 'select' a current type.
 pub trait Select<S: Selector>: {
@@ -64,6 +66,23 @@ pub trait Select<S: Selector>: {
     /// The current selected type.
     type Output;
 }
+
+/*
+////////////////////////////////////////////
+///         NEEDED BY EXAMPLES           ///
+////////////////////////////////////////////
+*/
+
+pub struct A;
+pub struct B;
+pub struct C;
+
+impl Selector for A {}
+impl Selector for B {}
+impl Selector for C {}
+
+////////////////////////////////////////////
+////////////////////////////////////////////
 
 impl <AA, BB, CC> Select<A> for (AA, BB, CC) {
     type Output = AA;
@@ -77,15 +96,43 @@ impl <AA, BB, CC> Select<C> for (AA, BB, CC) {
     type Output = CC;
 }
 
-pub trait ReverseSelect<Mapped> {
-    type Original;
-}
-
+/// Auto implements [`Select`] with the correct generics and parameters,
+/// Auto implements [`Selector`] for `st1`, `st2`, and `st3`.
+/// Auto implements [`ReverseSelect`] for `rt1`, `rt2` and `rt3`.
 #[macro_export]
 macro_rules! conversion {
-    ($select_type:ty, $real_type:ty) => ({
-        impl ReverseSelect<$select_type> for $real_type {
-            type Original = $select_type;
+    ($st1:ident : $rt1:ty, $st2:ident : $rt2:ty, $st3:ident : $rt3:ty) => ({
+
+        struct $st1;
+        struct $st2;
+        struct $st3;
+
+        impl Selector for $st1 {}
+        impl Selector for $st2 {}
+        impl Selector for $st3 {}
+
+        impl Select<$st1> for ($rt1, $rt2, $rt3) {
+            type Output = $rt1;
+        }
+
+        impl Select<$st2> for ($rt1, $rt2, $rt3) {
+            type Output = $rt2;
+        }
+
+        impl Select<$st3> for ($rt1, $rt2, $rt3) {
+            type Output = $rt3;
+        }
+
+        impl ReverseSelect<$st1> for $rt1 {
+            type Original = $st1;
+        }
+
+        impl ReverseSelect<$st2> for $rt2 {
+            type Original = $st2;
+        }
+
+        impl ReverseSelect<$st3> for $rt3 {
+            type Original = $st3;
         }
     });
 }
@@ -213,15 +260,21 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     /// Pushes a new element to the vector.
     /// # Examples
     /// ```
-    /// use anyvec::selectvec::{SelectVec, A, B, C};
-    /// let mut vec = SelectVec::<char, char, u8, String>::new();
-    ///
-    /// vec.push::<A>('a');
-    /// vec.push::<A>('b');
+    /// #[macro_use]
+    /// extern crate anyvec;
     /// 
-    /// assert_eq!(vec.pop::<A>(), Some('b'));
-    /// assert_eq!(vec.pop::<A>(), Some('a'));
-    /// assert_eq!(vec.pop::<A>(), None);
+    /// use anyvec::selectvec::{SelectVec, ReverseSelect, Select, Selector};
+    /// 
+    /// fn main() {
+    ///     let mut vec = SelectVec!(char, u8, String);
+    /// 
+    ///     vec.push('a');
+    ///     vec.push('b');
+    /// 
+    ///     assert_eq!(vec.pop(), Some('b'));
+    ///     assert_eq!(vec.pop(), Some('a'));
+    ///     assert_eq!(vec.pop(), None);
+    /// }
     ///```
     #[inline]
     pub fn push<S: Selector>(&mut self, item: T)
@@ -235,6 +288,7 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     #[inline]
     pub fn pop<S: Selector>(&mut self) -> Option<T>
     where
+        T: ReverseSelect<S, Original = S>,
         (A, B, C): Select<S, Output = T>
     {
         self.data.pop().map(|i| i.select::<S>())
@@ -253,6 +307,7 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     #[inline]
     pub fn into_iter<S: Selector>(self) -> impl Iterator<Item = T>
     where
+        T: ReverseSelect<S, Original = S>,
         (A, B, C): Select<S, Output = T>
     {
         self.data.into_iter().map(|item| item.select::<S>())
@@ -261,35 +316,42 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     /// It returns a new `AnyVec<U, A, B, C>`, that can now hold a different data-type.
     /// # Examples
     /// ```
-    /// use anyvec::selectvec::{SelectVec, A, B, C};
-    /// let mut vec = SelectVec::<char, char, u8, String>::new();
+    /// #[macro_use]
+    /// extern crate anyvec;
+    /// use anyvec::selectvec::{SelectVec, ReverseSelect, Select, Selector};
+    /// fn main() {
+    ///     let mut vec = SelectVec!(char, u8, String);
     ///
-    /// vec.push::<A>('a');
+    ///     vec.push('a');
     ///
-    /// let mut changed = vec.change_type::<C, String>();
+    ///     let mut changed = vec.change_type();
     ///
-    /// changed.push::<C>(String::from("foo"));
+    ///     changed.push(String::from("foo"));
     ///
-    /// assert_eq!(changed.pop::<C>(), Some(String::from("foo")));
+    ///     assert_eq!(changed.pop(), Some(String::from("foo")));
+    /// }
     /// ```
     ///
     /// # Panic
     /// Trying to change to a datatype that is not specified at creation, is not allowed, and will result in a panic!():
     ///
     /// ```comptime_fail
-    /// use anyvec::selectvec{SelectVec, A, B, C};
-    /// let mut vec = SelectVec::<char, char, u8, String>::new();
+    /// #[macro_use]
+    /// extern crate anyvec;
+    /// use anyvec::selectvec::{SelectVec, ReverseSelect, Select, Selector};
+    /// fn main() {
+    ///     let mut vec = SelectVec!(char, u8, String);
+    ///     vec.push('a');
     ///
-    /// vec.push::<A>('a');
-    ///
-    /// let mut changed = vec.change_type::<B, _>();
-    /// changed.push::<B>(10);
-    /// assert_eq!(changed.pop::<B>(), Some(10));
-    ///
+    ///     let mut changed = vec.change_type();
+    ///     changed.push(10);
+    ///     assert_eq!(changed.pop(), Some(10));
+    /// }
     /// ```
     #[inline]
     pub fn change_type<S: Selector, U>(mut self) -> SelectVec<U, A, B, C>
     where
+        U: ReverseSelect<S, Original = S>,
         (A, B, C): Select<S, Output = U>
     {
         self.data.clear();
@@ -305,38 +367,50 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     /// The new datatype must be a type specified at creation of the AnyVec, otherwise this function will panic.
     /// # Examples
     /// ```
-    /// use anyvec::selectvec::{SelectVec, A, B, C};
+    /// #[macro_use]
+    /// extern crate anyvec;
+    /// use anyvec::selectvec::{SelectVec, ReverseSelect, Select, Selector};
+    /// fn main() {
+    ///     let mut vec = SelectVec!(String, Result<u32, ()>, u32);
     ///
-    /// let mut vec = SelectVec::<&str, &str, Result<u32, ()>, u32>::new();
+    ///     vec.push(String::from("10"));
+    ///     vec.push(String::from("20"));
+    ///     vec.push(String::from("30"));
+    ///     vec.push(String::from("40"));
     ///
-    /// vec.push::<A>("10");
-    /// vec.push::<A>("20");
-    /// vec.push::<A>("30");
-    /// vec.push::<A>("40");
+    ///     let mut result_vec = vec.map(|s| s.parse::<u32>().map_err(|_| ()));
     ///
-    /// let mut result_vec = vec.map::<_, B, _>(|s| s.parse::<u32>().map_err(|_| ()) );
+    ///     {
+    ///         let mut iter = result_vec.iter();
     ///
-    /// {
-    ///     let mut iter = result_vec.iter();
-    ///
-    ///     assert_eq!(iter.next(), Some(&Ok(10)));
-    ///     assert_eq!(iter.next(), Some(&Ok(20)));
-    ///     assert_eq!(iter.next(), Some(&Ok(30)));
-    ///     assert_eq!(iter.next(), Some(&Ok(40)));
+    ///         assert_eq!(iter.next(), Some(&Ok(10)));
+    ///         assert_eq!(iter.next(), Some(&Ok(20)));
+    ///         assert_eq!(iter.next(), Some(&Ok(30)));
+    ///         assert_eq!(iter.next(), Some(&Ok(40)));
+    ///     }
+    ///     
+    ///     let mut back_to_string = result_vec.map(|r| r.unwrap().to_string());
+    ///     
+    ///     {
+    ///         for s in back_to_string.iter_mut() {
+    ///             s.push_str("10");
+    ///         }
+    ///     }
+    /// 
+    ///     let mut int_vec = back_to_string.map(|r| r.parse().unwrap());
+    /// 
+    ///     let mut iter = int_vec.into_iter();
+    /// 
+    ///     assert_eq!(iter.next(), Some(1010));
+    ///     assert_eq!(iter.next(), Some(2010));
+    ///     assert_eq!(iter.next(), Some(3010));
+    ///     assert_eq!(iter.next(), Some(4010));
     /// }
-    ///
-    /// let mut int_vec = result_vec.map::<_, C, _>(|r| r.unwrap());
-    /// 
-    /// let mut iter = int_vec.into_iter::<C>();
-    /// 
-    /// assert_eq!(iter.next(), Some(10));
-    /// assert_eq!(iter.next(), Some(20));
-    /// assert_eq!(iter.next(), Some(30));
-    /// assert_eq!(iter.next(), Some(40));
     /// ```
     #[inline]
     pub fn map<U, S: Selector, F: Fn(T) -> U>(self, f: F) -> SelectVec<U, A, B, C>
     where
+        U: ReverseSelect<S, Original = S>,
         (A, B, C): Select<S, Output = U>
     {
         let SelectVec { mut data, ..} = self;
@@ -362,17 +436,19 @@ impl <T, A, B, C> SelectVec<T, A, B, C> {
     }
 }
 
-// this works
-
-
+//@TODO: Generate random structnames, so there will Never ever be conflict!
+/// Creates a new [`struct@SelectVec`].
+/// This macro also generates 3 empty structs behind the scenes, that allow's the switching of types
 #[macro_export]
 macro_rules! SelectVec {
     ($type1:ty, $type2:ty, $type3:ty) => {
         {
             {
-                conversion!(A, $type1);
-                conversion!(B, $type2);
-                conversion!(C, $type3);
+                conversion!(
+                        A : $type1,
+                        B : $type2,
+                        C : $type3
+                );
             };
 
             SelectVec::<$type1, $type1, $type2, $type3>::new()
@@ -394,7 +470,7 @@ mod tests {
         vec.push(40);
 
 
-        let changed = vec.map::<_, B, _>(|s| Ok(s as u32) );
+        let changed = vec.map(|s| Ok(s as u32) );
         {
             let mut iter = changed.iter();
             assert_eq!(iter.next(), Some(&Ok(10)));
