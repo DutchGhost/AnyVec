@@ -217,18 +217,19 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
     }
 
     #[inline]
-    pub fn into_iter(self) -> impl Iterator<Item = T>
-    {
-        let data: Vec<D::Union>  = unsafe { ptr::read(&self.data as *const _) };
-        
+    pub fn into_data(self) -> Vec<D::Union> {
+        let data = unsafe { ptr::read(&self.data) };
         mem::forget(self);
+        data
+    }
 
-        let iter = data.into_iter().map(|i| unsafe {
+    #[inline]
+    pub fn into_iter(mut self) -> impl Iterator<Item = T>
+    {
+        self.into_data().into_iter().map(|i| unsafe {
             let item = SelectItem::<T, D>::from_inner(i);
             item.into()
-        });
-
-        iter
+        })
     }
 
     #[inline]
@@ -280,7 +281,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         self.data.clear();
 
         SelectVec {
-            data: self.data,
+            data: self.into_data(),
             marker: PhantomData,
         }
     }
@@ -317,7 +318,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
     where
         D: Select<S>, F: Fn(T) -> <D as Select<S>>::Output
     {
-        let SelectVec { mut data, ..} = self;
+        let mut data = self.into_data();
 
         unsafe {
             let ptr = data.as_mut_ptr();
