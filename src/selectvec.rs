@@ -485,6 +485,58 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
             Vec::from_raw_parts(base_write_ptr, len, new_capacity)
         }
     }
+
+    #[inline]
+    pub fn try_to_vec_map<S: Selector, F>(self, f: F) -> Vec<<D as Select<S>>::Output>
+    where
+        D: Select<S>,
+        F: Fn(T) -> <D as Select<S>>::Output,
+    {
+        if mem::align_of::<D::Union>() % mem::align_of::<<D as Select<S>>::Output>() != 0 {
+            panic!("Can not convert Vec with items of size {} into a Vec with items of size {}", mem::size_of::<D::Union>(), mem::size_of::<<D as Select<S>>::Output>())
+        }
+
+        let mut data = self.into_data();
+        let old_cap = data.capacity();
+
+        unsafe {
+            
+            let base_read_ptr = data.as_mut_ptr();
+            let base_write_ptr = base_read_ptr as *mut <D as Select<S>>::Output;
+
+            let len = data.len();
+            data.set_len(0);
+            
+            for i in 0..len as isize {
+                let read_ptr: *mut D::Union = base_read_ptr.offset(i);
+                let write_ptr: *mut <D as Select<S>>::Output = base_write_ptr.offset(i);
+
+                let any_t: SelectItem<T, D> = SelectItem::from_inner(ptr::read(read_ptr));
+                let t: T = any_t.into();
+                let u: <D as Select<S>>::Output = f(t);
+
+                ptr::write(write_ptr, u);
+            }
+
+            //DONT DROP DATA, WE CREATE A NEW VEC FROM IT USING A PTR. JUST FORGET ABOUT IT.
+            mem::forget(data);
+            
+            //calculate old capacity in bytes,
+            let old_cap_in_bytes = old_cap * mem::size_of::<D::Union>();
+            let new_capacity = old_cap_in_bytes / mem::size_of::<<D as Select<S>>::Output>();
+
+            // realloc            
+            if old_cap_in_bytes % mem::size_of::<<D as Select<S>>::Output>() != 0 {
+                
+                let nonnull = ptr::NonNull::new(base_read_ptr).unwrap();
+                let layout = Layout::array::<D::Union>(old_cap).unwrap();
+
+                Global.realloc(nonnull.as_opaque(), layout, new_capacity * mem::size_of::<<D as Select<S>>::Output>());
+            }
+
+            Vec::from_raw_parts(base_write_ptr, len, new_capacity)
+        }
+    }
 }
 
 impl <T, D> Drop for SelectVec<T, D>
@@ -557,7 +609,7 @@ mod tests {
         use super::*;
 
         let mut vec = SelectVec::<String, (String, u32, ())>::new();
-        
+
         vec.push(String::from("10"));
         vec.push(String::from("20"));
 
@@ -573,5 +625,24 @@ mod tests {
         assert_eq!(v.pop(), Some(10));
         assert_eq!(v.pop(), None);
 
+    }
+
+    #[test]
+    fn try_into_vec_map() {
+        use super::*;
+
+        let mut vec = SelectVec::<String, (String, u32, ())>::new();
+
+        vec.push(String::from("10"));
+        vec.push(String::from("20"));
+
+        let mut v = vec.try_to_vec_map::<B, _>(|s| s.parse().unwrap());
+
+        assert_eq!(v.capacity(), 12);
+        assert_eq!(v.len(), 2);
+        assert_eq!(v.pop(), Some(20));
+        assert_eq!(v.pop(), Some(10));
+        assert_eq!(v.pop(), None);
+        
     }
 }
