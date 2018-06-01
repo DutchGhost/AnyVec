@@ -10,9 +10,9 @@ use core::alloc::{Layout, Alloc};
 use std::alloc::Global;
 
 pub union Union3<A, B, C> {
-    a: A,
-    b: B,
-    c: C,
+    _a: A,
+    _b: B,
+    _c: C,
 }
 
 macro_rules! contains_type {
@@ -210,9 +210,13 @@ where
     marker: PhantomData<T>
 }
 
-impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
+impl<T, D> SelectVec<T, D>
+where
+    T: 'static,
+    D: TypeUnion,
+{
     
-    /// Creates a new empty `SelectVec<T, A, B, C>`.
+    /// Creates a new empty `SelectVec<T, D>`.
     #[inline]
     pub fn new() -> Self {
         SelectVec {
@@ -221,6 +225,8 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         }
     }
 
+    /// Creates a new empty `SelectVec<T, D>`.
+    /// The Vector will be able to hold exactly `capacity` items without reallocating.
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         SelectVec {
@@ -348,9 +354,15 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         }
     }
 
-    /// This function calls the closure for each element, changing the current datatype in place.
+    /// With this function, you can change the type the Vector holds in place.
     /// This does not allocate new space.
-    /// The new datatype must be a type specified at creation of the AnyVec, otherwise this function will panic.
+    /// Notice that this function to take a Generic parameter:
+    ///     - 'A' will change the type to the first of the types provided at creation of the SelectVec.
+    ///     - 'B' will change the type to the second of the types provided at creation of the SelectVec.
+    ///     - 'C' will change the type to the third of the types provided at creation of the SelectVec.
+    /// 
+    /// If the type the closure returns does not match with the new selected type, you will get a compiler error.
+    /// 
     /// # Examples
     /// ```
     /// use anyvec::selectvec::{SelectVec, A, B, C};
@@ -378,6 +390,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
     /// 
     /// # Safety
     /// If the closure panics, the internal vector is leaked.
+    /// 
     #[inline]
     pub fn map<S: Selector, F>(self, f: F) -> SelectVec<<D as Select<S>>::Output, D>
     where
@@ -406,6 +419,34 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         SelectVec {data, marker: PhantomData}
     }
 
+    /// This function has exactly the same context as [`SelectVec::map`], however notice that the type the closure returns is an Option.
+    /// When the closure returns None, the item does not get written to the Vector, therefore truncating the Vector.
+    /// 
+    /// The allocated space is not touched.
+    /// 
+    /// # Examples
+    /// ```
+    /// use anyvec::selectvec::{B, SelectVec};
+    /// 
+    /// let mut vec = (0..10).collect::<SelectVec<u32, (u32, String, ())>>();
+    /// 
+    /// let mut stringvec = vec.maybe_map::<B, _>(|n| {
+    ///     if n & 1 == 0 {
+    ///         Some(n.to_string())
+    ///     } else {
+    ///         None
+    ///     }
+    /// });
+    /// 
+    /// let mut iter = stringvec.into_iter();
+    /// 
+    /// assert_eq!(iter.next(), Some(String::from("0")));
+    /// assert_eq!(iter.next(), Some(String::from("2")));
+    /// assert_eq!(iter.next(), Some(String::from("4")));
+    /// assert_eq!(iter.next(), Some(String::from("6")));
+    /// assert_eq!(iter.next(), Some(String::from("8")));
+    /// assert_eq!(iter.next(), None);
+    /// ```
     #[inline]
     pub fn maybe_map<S: Selector, F>(self, f: F) -> SelectVec<<D as Select<S>>::Output, D>
     where
@@ -445,12 +486,36 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         SelectVec {data, marker: PhantomData}
     }
 
-    //@TODO: FIXME
+    /// Converts the SelectVec into a regular Vector, re-using the allocation.
+    /// Note that this can only be done when the Alignment of [`Union3`] is equal to the alignment of the current held type.
+    /// 
+    /// # Examples
+    /// ```
+    /// use anyvec::selectvec::{B, SelectVec};
+    /// 
+    /// let mut v = (0..5).collect::<SelectVec<u32, (u32, String, ())>>();
+    /// 
+    /// let string_svec = v.map::<B, _>(|n| n.to_string());
+    /// 
+    /// let ss = string_svec.try_to_vec();
+    /// 
+    /// let mut iter = ss.into_iter();
+    /// 
+    /// assert_eq!(iter.next(), Some(String::from("0")));
+    /// assert_eq!(iter.next(), Some(String::from("1")));
+    /// assert_eq!(iter.next(), Some(String::from("2")));
+    /// assert_eq!(iter.next(), Some(String::from("3")));
+    /// assert_eq!(iter.next(), Some(String::from("4")));
+    /// assert_eq!(iter.next(), None);
+    /// ```
     #[inline]
     pub fn try_to_vec(self) -> Vec<T>
     {
         if mem::align_of::<D::Union>() % mem::align_of::<T>() != 0 {
-            panic!("Can not convert Vec with items of size {} into a Vec with items of size {}", mem::size_of::<D::Union>(), mem::size_of::<T>())
+            panic!("Can not convert a Vector with items that have an alignment of {},
+                    into a Vector with items that have an alignment of {}.",
+                     mem::align_of::<D::Union>(), mem::align_of::<T>()
+            );
         }
 
         let mut data = self.into_data();
@@ -487,13 +552,34 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
                 let nonnull = ptr::NonNull::new(base_read_ptr).unwrap();
                 let layout = Layout::array::<D::Union>(old_cap).unwrap();
 
-                Global.realloc(nonnull.as_opaque(), layout, new_capacity * mem::size_of::<T>());
+                let _ = Global.realloc(nonnull.as_opaque(), layout, new_capacity * mem::size_of::<T>());
             }
 
             Vec::from_raw_parts(base_write_ptr, len, new_capacity)
         }
     }
 
+    /// This function has the same principle as [`SelectVec::try_into_vec()`].
+    /// The only difference is that the closure is called for each item, before it gets written back,
+    /// therefore saving a call to [`SelectVec::map()`] when you want to change the type in place, but also want a Vector back.
+    /// 
+    /// # Examples
+    /// ```
+    /// use anyvec::selectvec::{B, SelectVec};
+    /// 
+    /// let mut v = (0..5).collect::<SelectVec<u32, (u32, String, ())>>();
+    /// 
+    /// let ss = v.try_to_vec_map::<B, _>(|n| n.to_string());
+    /// 
+    /// let mut iter = ss.into_iter();
+    /// 
+    /// assert_eq!(iter.next(), Some(String::from("0")));
+    /// assert_eq!(iter.next(), Some(String::from("1")));
+    /// assert_eq!(iter.next(), Some(String::from("2")));
+    /// assert_eq!(iter.next(), Some(String::from("3")));
+    /// assert_eq!(iter.next(), Some(String::from("4")));
+    /// assert_eq!(iter.next(), None);
+    /// ```
     #[inline]
     pub fn try_to_vec_map<S: Selector, F>(self, f: F) -> Vec<<D as Select<S>>::Output>
     where
@@ -501,7 +587,10 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         F: Fn(T) -> <D as Select<S>>::Output,
     {
         if mem::align_of::<D::Union>() % mem::align_of::<<D as Select<S>>::Output>() != 0 {
-            panic!("Can not convert Vec with items of size {} into a Vec with items of size {}", mem::size_of::<D::Union>(), mem::size_of::<<D as Select<S>>::Output>())
+            panic!("Can not convert a Vector with items that have an alignment of {},
+                    into a Vector with items that have an alignment of {}.",
+                     mem::align_of::<D::Union>(), mem::align_of::<<D as Select<S>>::Output>()
+            );
         }
 
         let mut data = self.into_data();
@@ -539,7 +628,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
                 let nonnull = ptr::NonNull::new(base_read_ptr).unwrap();
                 let layout = Layout::array::<D::Union>(old_cap).unwrap();
 
-                Global.realloc(nonnull.as_opaque(), layout, new_capacity * mem::size_of::<<D as Select<S>>::Output>());
+                let _ = Global.realloc(nonnull.as_opaque(), layout, new_capacity * mem::size_of::<<D as Select<S>>::Output>());
             }
 
             Vec::from_raw_parts(base_write_ptr, len, new_capacity)
