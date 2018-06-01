@@ -6,6 +6,9 @@ use std::any::TypeId;
 use std::marker::PhantomData;
 use std::convert::{AsRef, AsMut};
 
+use core::alloc::{Layout, Alloc};
+use std::alloc::Global;
+
 pub union Union3<A, B, C> {
     a: A,
     b: B,
@@ -435,7 +438,12 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
     where
         D: Select<S>
     {
+        if mem::align_of::<D::Union>() % mem::align_of::<T>() != 0 {
+            panic!("Can not convert Vec with items of size {} into a Vec with items of size {}", mem::size_of::<D::Union>(), mem::size_of::<T>())
+        }
+
         let mut data = self.into_data();
+        let old_cap = data.capacity();
 
         unsafe {
             
@@ -457,8 +465,21 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
 
             //DONT DROP DATA, WE CREATE A NEW VEC FROM IT USING A PTR. JUST FORGET ABOUT IT.
             mem::forget(data);
+            
+            //calculate old capacity in bytes,
+            let old_cap_in_bytes = old_cap * mem::size_of::<D::Union>();
 
-            Vec::from_raw_parts(base_write_ptr, len, len)
+            //Panic?? Realloc??            
+            if old_cap_in_bytes % mem::size_of::<T>() != 0 {
+                let new_capacity = old_cap_in_bytes / mem::size_of::<T>();
+                
+                let nonnull = ptr::NonNull::new(base_read_ptr).unwrap();
+                let layout = Layout::array::<D::Union>(old_cap).unwrap();
+
+                Global.realloc(nonnull.as_opaque(), layout, new_capacity * mem::size_of::<T>());
+            }
+
+            Vec::from_raw_parts(base_write_ptr, len, old_cap_in_bytes / mem::size_of::<T>())
         }
     }
 }
