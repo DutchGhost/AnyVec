@@ -8,25 +8,25 @@ macro_rules! contains_type {
 }
 
 macro_rules! select {
-    ($($names:ident),*, [$($generics:tt),*]) => (
+    ([$($names:ident),*] => [$($generics:tt),*]) => (
         $(
             #[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
             pub struct $names;
         )*
 
-        select!(@INNER, $($names),*, $($generics),*);
+        select!(@INNER $($names,)* , $($generics,)*);
     );
 
-    (@INNER $name:tt $($names:tt),* $output:tt $($generics:tt),*) => (
+    (@INNER $name:ident $($names:ident),* $output:tt $($generics:tt),*) => (
         impl<$output, $($generics),*> Select<$name> for <$output, $($generics),*> {
             type Output = $output;
         }
 
-        select!(@INNER, $($names),*, $($generics),*, $output $($generics),*);
+        select!(@INNER $($names),*, $($generics),*, $output $($generics),*);
     );
 }
 
-select!(A, B, [AA, BB]);
+select!([A, B] => [AA, BB]);
 
 macro_rules! Union {
     (pub union $name:ident {
