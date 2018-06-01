@@ -2,8 +2,10 @@
 #![feature(const_type_id)]
 #![feature(untagged_unions)]
 #![feature(allocator_api)]
+#![feature(test)]
 
 extern crate core;
+extern crate test;
 
 use std::fmt;
 use std::{mem, ptr};

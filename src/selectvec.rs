@@ -646,3 +646,71 @@ mod tests {
         
     }
 }
+
+#[cfg(test)]
+mod benches {
+    
+    use test::Bencher;
+    use super::*;
+
+    #[bench]
+    fn vec_string_to_vec_int(b: &mut Bencher) {
+        b.iter(|| {
+            let mut v = Vec::new();
+
+            v.push("10");
+            v.push("20");
+            v.push("30");
+            v.push("40");
+            v.push("50");
+            v.push("60");
+            v.push("70");
+            v.push("80");
+            v.push("90");
+            v.push("100");
+
+            let ints = v.into_iter().map(|s| s.parse::<u32>().unwrap()).collect::<Vec<_>>();
+
+            assert!(ints[0] == 10);
+            assert!(ints[1] == 20);
+            assert!(ints[2] == 30);
+            assert!(ints[3] == 40);
+            assert!(ints[4] == 50);
+            assert!(ints[5] == 60);
+            assert!(ints[6] == 70);
+            assert!(ints[7] == 80);
+            assert!(ints[8] == 90);
+            assert!(ints[9] == 100);
+        })
+    }
+
+    #[bench]
+    pub fn selectvec_string_to_vec_int(b: &mut Bencher) {
+        b.iter(|| {
+            let mut v = SelectVec::<&str, (&str, u32, ())>::new();
+
+            v.push("10");
+            v.push("20");
+            v.push("30");
+            v.push("40");
+            v.push("50");
+            v.push("60");
+            v.push("70");
+            v.push("80");
+            v.push("90");
+            v.push("100");
+
+            let ints = v.try_to_vec_map::<B, _>(|s| s.parse().unwrap());
+            assert!(ints[0] == 10);
+            assert!(ints[1] == 20);
+            assert!(ints[2] == 30);
+            assert!(ints[3] == 40);
+            assert!(ints[4] == 50);
+            assert!(ints[5] == 60);
+            assert!(ints[6] == 70);
+            assert!(ints[7] == 80);
+            assert!(ints[8] == 90);
+            assert!(ints[9] == 100);
+        })
+    }
+}
