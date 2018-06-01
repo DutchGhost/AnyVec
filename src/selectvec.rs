@@ -221,6 +221,11 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         }
     }
 
+    /// Returns the type of the current selected type.
+    pub const fn current_type(&self) -> TypeId {
+        type_id::<T>()
+    }
+
     /// Returns the length of the underlying Vector.
     #[inline]
     pub fn len(&self) -> usize {
@@ -552,11 +557,13 @@ mod tests {
         use super::*;
 
         let mut vec = SelectVec::<String, (String, u32, ())>::new();
-
+        
         vec.push(String::from("10"));
         vec.push(String::from("20"));
 
         let ints = vec.map::<B, _>(|s| s.parse().unwrap());
+        
+        assert_eq!(ints.current_type(), type_id::<u32>());
 
         let mut v = ints.try_to_vec();
 
