@@ -14,6 +14,8 @@ use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 //pub mod selectvec;
 pub mod selectvec;
+
+#[macro_use]
 pub mod macros;
 
 /// This union is used by the [`AnyVec`] struct, to hold the current data-type.

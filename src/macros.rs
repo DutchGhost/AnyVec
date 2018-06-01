@@ -1,11 +1,32 @@
-#[macro_use]
 use selectvec::{TypeSelect, TypeUnion, type_id};
 
+#[macro_export]
 macro_rules! contains_type {
     ($T:ty, [$($O:ty),*]) => (
         false $(|| type_id::<$T>() == type_id::<$O>())*
     )
 }
+
+macro_rules! select {
+    ($($names:ident),*, [$($generics:tt),*]) => (
+        $(
+            #[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
+            pub struct $names;
+        )*
+
+        select!(@INNER, $($names),*, $($generics),*);
+    );
+
+    (@INNER $name:tt $($names:tt),* $output:tt $($generics:tt),*) => (
+        impl<$output, $($generics),*> Select<$name> for <$output, $($generics),*> {
+            type Output = $output;
+        }
+
+        select!(@INNER, $($names),*, $($generics),*, $output $($generics),*);
+    );
+}
+
+select!(A, B, [AA, BB]);
 
 macro_rules! Union {
     (pub union $name:ident {

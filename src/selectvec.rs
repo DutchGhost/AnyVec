@@ -9,16 +9,19 @@ use std::convert::{AsRef, AsMut};
 use core::alloc::{Layout, Alloc};
 use std::alloc::Global;
 
-pub union Union3<A, B, C> {
-    _a: A,
-    _b: B,
-    _c: C,
-}
+#[macro_use]
+use macros::*;
 
 macro_rules! contains_type {
     ($T:ty, [$($O:ty),*]) => (
         false $(|| type_id::<$T>() == type_id::<$O>())*
     )
+}
+
+pub union Union3<A, B, C> {
+    _a: A,
+    _b: B,
+    _c: C,
 }
 
 /// Returns the TypeId of `T`.
