@@ -434,9 +434,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
 
     //@TODO: FIXME
     #[inline]
-    pub fn try_to_vec<S: Selector>(self) -> Vec<T>
-    where
-        D: Select<S>
+    pub fn try_to_vec(self) -> Vec<T>
     {
         if mem::align_of::<D::Union>() % mem::align_of::<T>() != 0 {
             panic!("Can not convert Vec with items of size {} into a Vec with items of size {}", mem::size_of::<D::Union>(), mem::size_of::<T>())
@@ -560,7 +558,7 @@ mod tests {
 
         let ints = vec.map::<B, _>(|s| s.parse().unwrap());
 
-        let mut v = ints.try_to_vec::<A>();
+        let mut v = ints.try_to_vec();
 
         assert_eq!(v.capacity(), 12);
         assert_eq!(v.len(), 2);
