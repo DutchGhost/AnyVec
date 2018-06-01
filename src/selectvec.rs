@@ -438,12 +438,13 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         let mut data = self.into_data();
 
         unsafe {
+            
             let base_read_ptr = data.as_mut_ptr();
             let base_write_ptr = base_read_ptr as *mut T;
-            
+
             let len = data.len();
             data.set_len(0);
-
+            
             for i in 0..len as isize {
                 let read_ptr: *mut D::Union = base_read_ptr.offset(i);
                 let write_ptr: *mut T = base_write_ptr.offset(i);
@@ -453,9 +454,9 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
 
                 ptr::write(write_ptr, t);
             }
-            
+
             data.set_len(len);
-            mem::transmute(data)
+            Vec::from_raw_parts(base_write_ptr, len, len)
         }
     }
 }
