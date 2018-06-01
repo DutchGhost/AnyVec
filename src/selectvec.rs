@@ -468,10 +468,10 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
             
             //calculate old capacity in bytes,
             let old_cap_in_bytes = old_cap * mem::size_of::<D::Union>();
+            let new_capacity = old_cap_in_bytes / mem::size_of::<T>();
 
-            //Panic?? Realloc??            
+            // realloc            
             if old_cap_in_bytes % mem::size_of::<T>() != 0 {
-                let new_capacity = old_cap_in_bytes / mem::size_of::<T>();
                 
                 let nonnull = ptr::NonNull::new(base_read_ptr).unwrap();
                 let layout = Layout::array::<D::Union>(old_cap).unwrap();
@@ -479,7 +479,7 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
                 Global.realloc(nonnull.as_opaque(), layout, new_capacity * mem::size_of::<T>());
             }
 
-            Vec::from_raw_parts(base_write_ptr, len, old_cap_in_bytes / mem::size_of::<T>())
+            Vec::from_raw_parts(base_write_ptr, len, new_capacity)
         }
     }
 }
@@ -537,13 +537,36 @@ mod tests {
     }
 
     #[test]
-    fn select_wrong_type() {
+    fn select_type() {
         use super::*;
-        
+
         let mut vec = SelectVec::<char, (char, u8, String)>::new();
         vec.push('a');
+
         let mut changed = vec.map::<B, _>(|c| c as u8);
+        
         changed.push(10);
         assert_eq!(changed.pop(), Some(10));
+    }
+
+    #[test]
+    fn try_into_vec() {
+        use super::*;
+
+        let mut vec = SelectVec::<String, (String, u32, ())>::new();
+
+        vec.push(String::from("10"));
+        vec.push(String::from("20"));
+
+        let ints = vec.map::<B, _>(|s| s.parse().unwrap());
+
+        let mut v = ints.try_to_vec::<A>();
+
+        assert_eq!(v.capacity(), 12);
+        assert_eq!(v.len(), 2);
+        assert_eq!(v.pop(), Some(20));
+        assert_eq!(v.pop(), Some(10));
+        assert_eq!(v.pop(), None);
+
     }
 }
