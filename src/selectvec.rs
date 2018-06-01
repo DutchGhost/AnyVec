@@ -455,11 +455,9 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
                 ptr::write(write_ptr, t);
             }
 
-            data.set_len(len);
-
-            //DONT DROP DATA, WE CREATE A NEW VEC FROM IT USING A PTR
+            //DONT DROP DATA, WE CREATE A NEW VEC FROM IT USING A PTR. JUST FORGET ABOUT IT.
             mem::forget(data);
-            
+
             Vec::from_raw_parts(base_write_ptr, len, len)
         }
     }
