@@ -221,6 +221,14 @@ impl<T, D> SelectVec<T, D> where D: TypeUnion, T: 'static {
         }
     }
 
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        SelectVec {
+            data: Vec::with_capacity(capacity),
+            marker: PhantomData,
+        }
+    }
+    
     /// Returns the type of the current selected type.
     pub const fn current_type(&self) -> TypeId {
         type_id::<T>()
@@ -656,7 +664,7 @@ mod benches {
     #[bench]
     fn vec_string_to_vec_int(b: &mut Bencher) {
         b.iter(|| {
-            let mut v = Vec::new();
+            let mut v = Vec::with_capacity(10);
 
             v.push("10");
             v.push("20");
@@ -687,7 +695,7 @@ mod benches {
     #[bench]
     pub fn selectvec_string_to_vec_int(b: &mut Bencher) {
         b.iter(|| {
-            let mut v = SelectVec::<&str, (&str, u32, ())>::new();
+            let mut v = SelectVec::<&str, (&str, u32, ())>::with_capacity(10);
 
             v.push("10");
             v.push("20");
