@@ -146,6 +146,55 @@ where
     }
 }
 
+/// A slice that can change the type of the buffer in a controlled way.
+pub struct SelectSlice<'a, T: 'static, D: 'a + TypeUnion> {
+    data: &'a mut [D::Union],
+    marker: PhantomData<T>
+}
+
+impl <'a, T: 'static, D: 'a + TypeUnion> SelectSlice<'a, T, D> {
+    
+    #[inline]
+    pub const fn current_type(&self) -> TypeId {
+        type_id::<T>()
+    }
+
+    #[inline]
+    pub fn change_type<S>(self) -> SelectSlice<'a, <D as Select<S>>::Output, D>
+    where
+        S: Selector, D: Select<S>
+    {
+        SelectSlice {
+            data: self.data,
+            marker: PhantomData,
+        }
+    }
+
+    #[inline]
+    pub fn map<S: Selector, F>(self, f: F) -> SelectSlice<'a, <D as Select<S>>::Output, D>
+    where
+        D: Select<S>,
+        F: Fn(T) -> <D as Select<S>>::Output
+    {
+        let data = self.data;
+        unsafe {
+            let ptr = data.as_mut_ptr();
+            let len = data.len();
+            
+            for i in 0..len as isize {
+                let item_ptr: *mut D::Union = ptr.offset(i);
+                let any_t: SelectItem<T, D> = SelectItem::from_inner(ptr::read(item_ptr));
+                let t: T = any_t.into();
+                let u = f(t);
+                let any_u: SelectItem<<D as Select<S>>::Output, D> = SelectItem::from_unchecked(u);
+                ptr::write(item_ptr, any_u.into_inner());
+            }
+        }
+
+        SelectSlice {data, marker: PhantomData}
+    }
+}
+
 /// A Vector that can hold multiple data-types, and switch to those data-types, without losing its allocated space.
 pub struct SelectVec<T, D>
 where
@@ -220,6 +269,16 @@ where
         let data = unsafe { ptr::read(&self.data) };
         mem::forget(self);
         data
+    }
+
+    /// Creates a `SelectSlice`, a slice into the buffer of this struct.
+    /// SelectSlice can also map, and change the data-type of the buffer.
+    #[inline]
+    pub fn as_select_slice(&mut self) -> SelectSlice<T, D> {
+        SelectSlice {
+            data: self.data.as_mut(),
+            marker: PhantomData,
+        }
     }
 
     /// Returns a by-reference Iterator over the items contained in the Vector.
