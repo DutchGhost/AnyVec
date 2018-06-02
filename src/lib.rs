@@ -3,6 +3,9 @@
 #![feature(untagged_unions)]
 #![feature(allocator_api)]
 #![feature(test)]
+#![feature(trace_macros)]
+
+trace_macros!(true);
 
 extern crate core;
 extern crate test;

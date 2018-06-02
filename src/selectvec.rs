@@ -70,19 +70,19 @@ pub trait TypeUnion: Sized + 'static {
 
 }
 
-impl <A, B, C> TypeUnion for (A, B, C)
-where
-    A: 'static,
-    B: 'static,
-    C: 'static,
-{
-    type Union = Union3<A, B, C>;
+// impl <A, B, C> TypeUnion for (A, B, C)
+// where
+//     A: 'static,
+//     B: 'static,
+//     C: 'static,
+// {
+//     type Union = Union3<A, B, C>;
 
-    #[inline]
-    fn contains<T: 'static>() -> bool {
-        contains_type!(T, [A, B, C])
-    }
-}
+//     #[inline]
+//     fn contains<T: 'static>() -> bool {
+//         contains_type!(T, [A, B, C])
+//     }
+// }
 
 #[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
 pub struct A;

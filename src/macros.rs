@@ -38,12 +38,12 @@ macro_rules! select {
     )
 }
 
-select!([A, B] => [AA, BB]);
+//select!([A, B] => [AA, BB]);
 
 macro_rules! Union {
     (pub union $name:ident {
-        $($varname:ident: $generics:tt,)*
-    }) => (
+        $($varname:ident: $generics:tt),*
+    }) =>  (
         pub union $name<$($generics),*> {
             $($varname: $generics,)*
         }
@@ -68,76 +68,79 @@ macro_rules! Union {
 }
 
 macro_rules! GenUnion {
-    ([$name:ident, $($names:ident),*] => [$varname:ident: $generic:tt, $($varnames:ident: $generics:ident),*]) => {
+    //@We always have 1 name and generic left.
+    ([] => [$varname:ident:$generic:tt]) => ();
+    ([$name:ident $(,$names:ident)*] => [$varname:ident: $generic:ident $(,$varnames:ident: $generics:ident)*]) => {
         Union!(pub union $name {
-            $varname: $generic,
-            $($varnames: $generics),*
+            $varname: $generic
+            $(, $varnames: $generics)*
         });
 
         GenUnion!([$($names),*] => [$($varnames: $generics),*]);
     };
 }
 
-GenUnion!([Union1, Union2, Union3] => [a: A, b: B, c: C]);
+GenUnion!([Union10, Union9, Union8, Union7, Union6, Union5, Union4, Union3, Union2] =>
+          [a: A,    b: B,   c: C,   d: D,   e: E,   f: F,   g: G,   h: H,   i: I,   j: J]);
 
-Union!(pub union Union2 {
-    a: A,
-    b: B,
-});
+// Union!(pub union Union2 {
+//     a: A,
+//     b: B,
+// });
 
-Union!(pub union Union4 {
-    a: A,
-    b: B,
-    c: C,
-    d: D,
-});
+// Union!(pub union Union4 {
+//     a: A,
+//     b: B,
+//     c: C,
+//     d: D,
+// });
 
-Union!(pub union Union5 {
-    a: A,
-    b: B,
-    c: C,
-    d: D,
-    e: E,
-});
+// Union!(pub union Union5 {
+//     a: A,
+//     b: B,
+//     c: C,
+//     d: D,
+//     e: E,
+// });
 
-Union!(pub union Union6 {
-    a: A,
-    b: B,
-    c: C,
-    d: D,
-    e: E,
-    f: F,
-});
+// Union!(pub union Union6 {
+//     a: A,
+//     b: B,
+//     c: C,
+//     d: D,
+//     e: E,
+//     f: F,
+// });
 
-Union!(pub union Union7 {
-    a: A,
-    b: B,
-    c: C,
-    d: D,
-    e: E,
-    f: F,
-    g: G,
-});
+// Union!(pub union Union7 {
+//     a: A,
+//     b: B,
+//     c: C,
+//     d: D,
+//     e: E,
+//     f: F,
+//     g: G,
+// });
 
-Union!(pub union Union8 {
-    a: A,
-    b: B,
-    c: C,
-    d: D,
-    e: E,
-    f: F,
-    g: G,
-    h: H,
-});
+// Union!(pub union Union8 {
+//     a: A,
+//     b: B,
+//     c: C,
+//     d: D,
+//     e: E,
+//     f: F,
+//     g: G,
+//     h: H,
+// });
 
-Union!(pub union Union9 {
-    a: A,
-    b: B,
-    c: C,
-    d: D,
-    e: E,
-    f: F,
-    g: G,
-    h: H,
-    i: I,
-});
+// Union!(pub union Union9 {
+//     a: A,
+//     b: B,
+//     c: C,
+//     d: D,
+//     e: E,
+//     f: F,
+//     g: G,
+//     h: H,
+//     i: I,
+// });
