@@ -67,6 +67,19 @@ macro_rules! Union {
     )
 }
 
+macro_rules! GenUnion {
+    ([$name:ident, $($names:ident),*] => [$varname:ident: $generic:tt, $($varnames:ident: $generics:ident),*]) => {
+        Union!(pub union $name {
+            $varname: $generic,
+            $($varnames: $generics),*
+        });
+
+        GenUnion!([$($names),*] => [$($varnames: $generics),*]);
+    };
+}
+
+GenUnion!([Union1, Union2, Union3] => [a: A, b: B, c: C]);
+
 Union!(pub union Union2 {
     a: A,
     b: B,
