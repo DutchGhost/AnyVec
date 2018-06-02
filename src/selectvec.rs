@@ -107,17 +107,17 @@ pub trait Select<S: Selector> {
     type Output: 'static;
 }
 
-impl <AA, BB, CC> Select<A> for (AA, BB, CC) where AA: 'static {
-    type Output = AA;
-}
+// impl <AA, BB, CC> Select<A> for (AA, BB, CC) where AA: 'static {
+//     type Output = AA;
+// }
 
-impl <AA, BB, CC> Select<B> for (AA, BB, CC) where BB: 'static  {
-    type Output = BB;
-}
+// impl <AA, BB, CC> Select<B> for (AA, BB, CC) where BB: 'static  {
+//     type Output = BB;
+// }
 
-impl <AA, BB, CC> Select<C> for (AA, BB, CC) where CC: 'static  {
-    type Output = CC;
-}
+// impl <AA, BB, CC> Select<C> for (AA, BB, CC) where CC: 'static  {
+//     type Output = CC;
+// }
 
 /// Struct to safely to from [`Union3`] to `T`.
 /// 

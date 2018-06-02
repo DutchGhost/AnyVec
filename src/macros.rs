@@ -7,38 +7,83 @@ macro_rules! contains_type {
     )
 }
 
-macro_rules! select {
-    ([$($names:ident),*] => [$($generics:tt),*]) => (
-        $(
-            #[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
-            pub struct $names;
+macro_rules! Zstruct {
+    ($name:ident $(,$names:ident)*) => (
+        #[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
+        pub struct $name;
 
-            impl Selector for $names {}
-        )*
+        impl Selector for $name {}
 
-        select!(@INNER: [$($names),*] => $($generics),*);
+        Zstruct!($($names),*);
     );
 
-    (@INNER: [$name:ident $(,$names:ident)*] => $output:tt $(,$generics:tt)*) => (
-        // impl<$output $(,$generics),*> Select<$name> for <$output, $($generics)*> {
-        //     type Output = $output;
-        // }
-
-        select!(@IMPL $name => [$output $(,$generics)* ]);
-        select!(@INNER: [$($names)*] => $($generics)*);
-    );
-
-    (@IMPL $name:ident => [$output:tt $(,$generic:tt)*]) => (
-        impl <$output, $($generic),*> Select<$name> for ($output, $($generic),*)
-        where
-            $output: 'static
-        {
-            type Output = $output;
-        }
-    )
+    () => ();
 }
 
-//select!([A, B] => [AA, BB]);
+macro_rules! impl_select {
+    (
+        NAMES = [$name:ident $(,$names:ident)*],
+        GENERICS = [$current:tt $(,$generics:tt)*],
+        COPY = [$($copies:tt),*]
+    ) => (
+        impl <$($copies),*> Select<$name> for ($($copies),*)
+        where
+            $current: 'static
+        {
+            type Output = $current;
+        }
+
+        impl_select!(
+            NAMES = [$($names),*],
+            GENERICS = [$($generics),*],
+            COPY = [$($copies),*]
+        );
+    );
+
+    (
+        NAMES = [],
+        GENERICS = [],
+        COPY = [$($copies:tt),*]
+    ) => ();
+}
+macro_rules! select {
+    //Take all names, and generate the structs directly.
+    (
+        NAMES = [$($names:ident),*],
+        GENERICS = [$($generics:tt),*]
+    ) => (
+
+        //Generate the structs.
+        Zstruct!($($names),*);
+
+        // Calls self with a copy of the generics,
+        select!(
+            NAMES = [$($names),*],
+            GENERICS = [$($generics),*],
+            ALL_GENERICS = [$($generics),*]
+        );
+    );
+
+    //takes all names, knowing the current name,
+    //takes all generics, knowing the current generic,
+    //takes also a copy of all generics.
+    (
+        NAMES = [$($names:ident),*],
+        GENERICS = [$current:tt $(,$gens:tt)*],
+        ALL_GENERICS = [$($all_generics:tt),*]
+    ) => (
+        impl_select!(
+            NAMES = [$($names),*],
+            GENERICS = [$current $(,$gens)*],
+            COPY = [$($all_generics),*]
+        );
+    );
+}
+
+select!(
+    NAMES = [A, B, C, D, E],
+    GENERICS = [AA, BB, CC, DD, EE]
+);
 
 macro_rules! Union {
     (pub union $name:ident {
@@ -68,20 +113,32 @@ macro_rules! Union {
 }
 
 macro_rules! GenUnion {
-    //@We always have 1 name and generic left.
-    ([] => [$varname:ident:$generic:tt]) => ();
-    ([$name:ident $(,$names:ident)*] => [$varname:ident: $generic:ident $(,$varnames:ident: $generics:ident)*]) => {
+    //We always have 1 name and generic left.
+    (
+        NAMES = [],
+        FIELDS = [$varname:ident:$generic:tt]
+    ) => ();
+
+    (
+        NAMES = [$name:ident $(,$names:ident)*],
+        FIELDS = [$varname:ident: $generic:ident $(,$varnames:ident: $generics:ident)*]
+    ) => {
         Union!(pub union $name {
             $varname: $generic
             $(, $varnames: $generics)*
         });
 
-        GenUnion!([$($names),*] => [$($varnames: $generics),*]);
+        GenUnion!(
+            NAMES = [$($names),*],
+            FIELDS = [$($varnames: $generics),*]
+        );
     };
 }
 
-GenUnion!([Union10, Union9, Union8, Union7, Union6, Union5, Union4, Union3, Union2] =>
-          [a: A,    b: B,   c: C,   d: D,   e: E,   f: F,   g: G,   h: H,   i: I,   j: J]);
+GenUnion!(
+    NAMES = [Union10, Union9, Union8, Union7, Union6, Union5, Union4, Union3, Union2],
+    FIELDS = [a: A,    b: B,   c: C,   d: D,   e: E,   f: F,   g: G,   h: H,   i: I,   j: J]
+);
 
 // Union!(pub union Union2 {
 //     a: A,
