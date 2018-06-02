@@ -1,5 +1,5 @@
 [package]
-name = "anyvec"
+name = "selectvec"
 version = "0.1.0"
 authors = ["DutchGhost <kasper199914@gmail.com>"]
 
