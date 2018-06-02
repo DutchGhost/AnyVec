@@ -9,21 +9,6 @@ use std::convert::{AsRef, AsMut};
 use core::alloc::{Layout, Alloc};
 use std::alloc::Global;
 
-#[macro_use]
-use macros::*;
-
-macro_rules! contains_type {
-    ($T:ty, [$($O:ty),*]) => (
-        false $(|| type_id::<$T>() == type_id::<$O>())*
-    )
-}
-
-pub union Union3<A, B, C> {
-    _a: A,
-    _b: B,
-    _c: C,
-}
-
 /// Returns the TypeId of `T`.
 pub const fn type_id<T: 'static>() -> TypeId {
     TypeId::of::<T>()
@@ -32,7 +17,7 @@ pub const fn type_id<T: 'static>() -> TypeId {
 pub unsafe trait TypeSelect<U: TypeUnion> : Sized {
     
     /// Casts `self` to `T`.
-    /// This should only be used in context with [`Union3`],
+    /// This should only be used in context with types implementing [`TypeUnion`],
     /// to safely cast the union into its current held datatype.
     /// 
     /// # Panic
@@ -55,9 +40,6 @@ pub unsafe trait TypeSelect<U: TypeUnion> : Sized {
         self.cast()
     }
 }
-unsafe impl<A, B, C> TypeSelect<(A, B, C)> for Union3<A, B, C> 
-    where A: 'static, B: 'static, C: 'static
-{}
 
 /// This trait is used to check at runtime whether any type `T` equals one of a sequence of other types.
 /// Part of this check can happen during compilation, since we know the types of `T` and the sequence at compile time,
@@ -70,35 +52,8 @@ pub trait TypeUnion: Sized + 'static {
 
 }
 
-// impl <A, B, C> TypeUnion for (A, B, C)
-// where
-//     A: 'static,
-//     B: 'static,
-//     C: 'static,
-// {
-//     type Union = Union3<A, B, C>;
-
-//     #[inline]
-//     fn contains<T: 'static>() -> bool {
-//         contains_type!(T, [A, B, C])
-//     }
-// }
-
-#[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
-pub struct A;
-
-#[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
-pub struct B;
-
-#[derive(Debug, Ord, PartialOrd, Hash, Eq, PartialEq, Default)]
-pub struct C;
-
 /// Helper trait to index into a tuple of Generics.
 pub trait Selector {}
-
-impl Selector for A {}
-impl Selector for B {}
-impl Selector for C {}
 
 /// Helper trait to 'select' a generic type out of a tuple of Generics.
 pub trait Select<S: Selector> {
@@ -107,23 +62,11 @@ pub trait Select<S: Selector> {
     type Output: 'static;
 }
 
-// impl <AA, BB, CC> Select<A> for (AA, BB, CC) where AA: 'static {
-//     type Output = AA;
-// }
-
-// impl <AA, BB, CC> Select<B> for (AA, BB, CC) where BB: 'static  {
-//     type Output = BB;
-// }
-
-// impl <AA, BB, CC> Select<C> for (AA, BB, CC) where CC: 'static  {
-//     type Output = CC;
-// }
-
-/// Struct to safely to from [`Union3`] to `T`.
+/// Struct to safely convert from a [`TypeUnion`] to `T`, and vice versa.
 /// 
 /// # Examples
 /// ```
-/// use anyvec::selectvec::{SelectItem, Selector, A, B, C};
+/// use selectvec::{A, selectvec::{SelectItem, Selector}};
 /// 
 /// let mut item: SelectItem<u32, (u32, String, ())> = SelectItem::from::<A>(10);
 /// ```
@@ -314,11 +257,11 @@ where
         })
     }
 
-    /// Returns a new instance of `AnyVec<U, A, B, C>` by clearing the current vector, leaving the allocated space untouched.
-    /// It returns a new `AnyVec<U, A, B, C>`, that can now hold a different data-type.
+    /// Returns a new instance of `SelectVec<U, A, B, C>` by clearing the current vector, leaving the allocated space untouched.
+    /// It returns a new `SelectVec<U, A, B, C>`, that can now hold a different data-type.
     /// # Examples
     /// ```
-    /// use anyvec::selectvec::{SelectVec, A, B, C};
+    /// use selectvec::{C, selectvec::SelectVec};
     /// let mut vec = SelectVec::<char, (char, u8, String)>::new();
     ///
     /// vec.push('a');
@@ -334,10 +277,11 @@ where
     /// Trying to change to a datatype that is not specified at creation, is not allowed, and will result in a panic!():
     ///
     /// ```comptime_fail
-    /// use anyvec::selectvec{SelectVec, A, B, C};
+    /// 
+    /// use selectvec::{C, selectvec::SelectVec};
     /// let mut vec = SelectVec::<char, (char, u8, String)>::new();
     ///
-    /// vec.push('a');
+    /// vec.push('a');car
     ///
     /// let mut changed = vec.change_type::<C>();
     /// changed.push(10);
@@ -368,7 +312,7 @@ where
     /// 
     /// # Examples
     /// ```
-    /// use anyvec::selectvec::{SelectVec, A, B, C};
+    /// use selectvec::{B, selectvec::SelectVec};
     ///
     /// let mut vec = SelectVec::<&str, (&str, Result<u32, ()>, u32)>::new();
     ///
@@ -429,7 +373,7 @@ where
     /// 
     /// # Examples
     /// ```
-    /// use anyvec::selectvec::{B, SelectVec};
+    /// use selectvec::{B, selectvec::SelectVec};
     /// 
     /// let mut vec = (0..10).collect::<SelectVec<u32, (u32, String, ())>>();
     /// 
@@ -490,11 +434,12 @@ where
     }
 
     /// Converts the SelectVec into a regular Vector, re-using the allocation.
-    /// Note that this can only be done when the Alignment of [`Union3`] is equal to the alignment of the current held type.
+    /// Note that this can only be done when the Alignment of the Union `D`,
+    /// is equal to the alignment of the current held type.
     /// 
     /// # Examples
     /// ```
-    /// use anyvec::selectvec::{B, SelectVec};
+    /// use selectvec::{B, selectvec::SelectVec};
     /// 
     /// let mut v = (0..5).collect::<SelectVec<u32, (u32, String, ())>>();
     /// 
@@ -562,13 +507,13 @@ where
         }
     }
 
-    /// This function has the same principle as [`SelectVec::try_into_vec()`].
+    /// This function has the same principle as [`SelectVec::try_to_vec()`].
     /// The only difference is that the closure is called for each item, before it gets written back,
     /// therefore saving a call to [`SelectVec::map()`] when you want to change the type in place, but also want a Vector back.
     /// 
     /// # Examples
     /// ```
-    /// use anyvec::selectvec::{B, SelectVec};
+    /// use selectvec::{B, selectvec::SelectVec};
     /// 
     /// let mut v = (0..5).collect::<SelectVec<u32, (u32, String, ())>>();
     /// 
@@ -672,8 +617,9 @@ mod tests {
     #[test]
     fn convertion_test() {
         use super::*;
+        use B;
      
-        let mut vec = SelectVec::<u16, (u16, Result<u32, ()>, u32)>::new();
+        let mut vec = SelectVec::<u16, (u16, Result<u32, ()>)>::new();
         
         vec.push(10);
         vec.push(20);
@@ -694,6 +640,7 @@ mod tests {
     #[test]
     fn select_type() {
         use super::*;
+        use B;
 
         let mut vec = SelectVec::<char, (char, u8, String)>::new();
         vec.push('a');
@@ -707,8 +654,9 @@ mod tests {
     #[test]
     fn try_into_vec() {
         use super::*;
+        use B;
 
-        let mut vec = SelectVec::<String, (String, u32, ())>::new();
+        let mut vec = SelectVec::<String, (String, u32)>::new();
 
         vec.push(String::from("10"));
         vec.push(String::from("20"));
@@ -730,8 +678,9 @@ mod tests {
     #[test]
     fn try_into_vec_map() {
         use super::*;
+        use B;
 
-        let mut vec = SelectVec::<String, (String, u32, ())>::new();
+        let mut vec = SelectVec::<String, (String, u32)>::new();
 
         vec.push(String::from("10"));
         vec.push(String::from("20"));
@@ -744,73 +693,5 @@ mod tests {
         assert_eq!(v.pop(), Some(10));
         assert_eq!(v.pop(), None);
         
-    }
-}
-
-#[cfg(test)]
-mod benches {
-    
-    use test::Bencher;
-    use super::*;
-
-    #[bench]
-    fn vec_string_to_vec_int(b: &mut Bencher) {
-        b.iter(|| {
-            let mut v = Vec::with_capacity(10);
-
-            v.push("10");
-            v.push("20");
-            v.push("30");
-            v.push("40");
-            v.push("50");
-            v.push("60");
-            v.push("70");
-            v.push("80");
-            v.push("90");
-            v.push("100");
-
-            let ints = v.into_iter().map(|s| s.parse::<u32>().unwrap()).collect::<Vec<_>>();
-
-            assert!(ints[0] == 10);
-            assert!(ints[1] == 20);
-            assert!(ints[2] == 30);
-            assert!(ints[3] == 40);
-            assert!(ints[4] == 50);
-            assert!(ints[5] == 60);
-            assert!(ints[6] == 70);
-            assert!(ints[7] == 80);
-            assert!(ints[8] == 90);
-            assert!(ints[9] == 100);
-        })
-    }
-
-    #[bench]
-    pub fn selectvec_string_to_vec_int(b: &mut Bencher) {
-        b.iter(|| {
-            let mut v = SelectVec::<&str, (&str, u32, ())>::with_capacity(10);
-
-            v.push("10");
-            v.push("20");
-            v.push("30");
-            v.push("40");
-            v.push("50");
-            v.push("60");
-            v.push("70");
-            v.push("80");
-            v.push("90");
-            v.push("100");
-
-            let ints = v.try_to_vec_map::<B, _>(|s| s.parse().unwrap());
-            assert!(ints[0] == 10);
-            assert!(ints[1] == 20);
-            assert!(ints[2] == 30);
-            assert!(ints[3] == 40);
-            assert!(ints[4] == 50);
-            assert!(ints[5] == 60);
-            assert!(ints[6] == 70);
-            assert!(ints[7] == 80);
-            assert!(ints[8] == 90);
-            assert!(ints[9] == 100);
-        })
     }
 }

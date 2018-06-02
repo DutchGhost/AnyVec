@@ -54,7 +54,7 @@ macro_rules! select {
     ) => (
 
         //Generate the structs.
-        Zstruct!($($names),*);
+        //Zstruct!($($names),*);
 
         // Calls self with a copy of the generics,
         select!(
@@ -80,10 +80,53 @@ macro_rules! select {
     );
 }
 
+Zstruct!(A, B, C, D, E, F, G, H, I, J);
+
+select!(
+    NAMES = [A, B],
+    GENERICS = [AA, BB]
+);
+
+select!(
+    NAMES = [A, B, C],
+    GENERICS = [AA, BB, CC]
+);
+
+select!(
+    NAMES = [A, B, C, D],
+    GENERICS = [AA, BB, CC, DD]
+);
+
 select!(
     NAMES = [A, B, C, D, E],
     GENERICS = [AA, BB, CC, DD, EE]
 );
+
+select!(
+    NAMES = [A, B, C, D, E, F],
+    GENERICS = [AA, BB, CC, DD, EE, FF]
+);
+
+select!(
+    NAMES = [A, B, C, D, E, F, G],
+    GENERICS = [AA, BB, CC, DD, EE, FF, GG]
+);
+
+select!(
+    NAMES = [A, B, C, D, E, F, G, H],
+    GENERICS = [AA, BB, CC, DD, EE, FF, GG, HH]
+);
+
+select!(
+    NAMES = [A, B, C, D, E, F, G, H, I],
+    GENERICS = [AA, BB, CC, DD, EE, FF, GG, HH, II]
+);
+
+select!(
+    NAMES = [A, B, C, D, E, F, G, H, I, J],
+    GENERICS = [AA, BB, CC, DD, EE, FF, GG, HH, II, JJ]
+);
+
 
 macro_rules! Union {
     (pub union $name:ident {
