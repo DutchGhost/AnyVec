@@ -132,6 +132,7 @@ macro_rules! Union {
     (pub union $name:ident {
         $($varname:ident: $generics:tt),*
     }) =>  (
+        #[derive(Copy, Clone)]
         pub union $name<$($generics),*> {
             $($varname: $generics,)*
         }
@@ -152,6 +153,22 @@ macro_rules! Union {
         where
             $($generics: 'static),*
         {}
+
+        impl <$($generics),*> $name<$($generics),*> {
+            
+            /// Indexes into `self`, cloning the contained value.
+            /// This is marked unsafe, because the type bein cloned is not known at compiletime.
+            /// This means the clone could end up in garbage.
+            pub unsafe fn clone_as<S: Selector>(&self) -> <($($generics),*) as Select<S>>::Output
+            where
+                ($($generics),*): Select<S>,
+                <($($generics),*) as Select<S>>::Output: Clone
+            {
+                let output = ::std::mem::transmute::<&Self, &<($($generics),*) as Select<S>>::Output>(self);
+                
+                output.clone()
+            }
+        }
     )
 }
 

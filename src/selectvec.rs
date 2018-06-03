@@ -147,12 +147,20 @@ where
 }
 
 /// A slice that can change the type of the buffer in a controlled way.
-pub struct SelectSlice<'a, T: 'static, D: 'a + TypeUnion> {
+pub struct SelectSlice<'a, T, D>
+where
+    T: 'static,
+    D: 'a + TypeUnion,
+{
     data: &'a mut [D::Union],
     marker: PhantomData<T>
 }
 
-impl <'a, T: 'static, D: 'a + TypeUnion> SelectSlice<'a, T, D> {
+impl <'a, T, D> SelectSlice<'a, T, D>
+where
+    T: 'static,
+    D: 'a + TypeUnion,
+{
     
     #[inline]
     pub const fn current_type(&self) -> TypeId {
@@ -193,9 +201,20 @@ impl <'a, T: 'static, D: 'a + TypeUnion> SelectSlice<'a, T, D> {
 
         SelectSlice {data, marker: PhantomData}
     }
+
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.data.iter().map(|item| unsafe { mem::transmute(item) })
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.data.iter_mut().map(|item| unsafe { mem::transmute(item) })
+    }
 }
 
 /// A Vector that can hold multiple data-types, and switch to those data-types, without losing its allocated space.
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone)]
 pub struct SelectVec<T, D>
 where
     T: 'static,
@@ -694,6 +713,8 @@ mod tests {
             assert_eq!(iter.next(), Some(&Ok(30)));
             assert_eq!(iter.next(), Some(&Ok(40)));
         }
+
+        let clone = changed.clone();
     }
 
     #[test]
