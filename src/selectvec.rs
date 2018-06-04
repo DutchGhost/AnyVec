@@ -318,15 +318,15 @@ where
         }
     }
 
-    /// Returns a by-value Iterator over the items contained in the Vector.
-    #[inline]
-    pub fn into_iter(self) -> impl Iterator<Item = T>
-    {
-        self.into_data().into_iter().map(|i| unsafe {
-            let item = SelectItem::<T, D>::from_inner(i);
-            item.into()
-        })
-    }
+    // /// Returns a by-value Iterator over the items contained in the Vector.
+    // #[inline]
+    // pub fn into_iter(self) -> impl Iterator<Item = T>
+    // {
+    //     self.into_data().into_iter().map(|i| unsafe {
+    //         let item = SelectItem::<T, D>::from_inner(i);
+    //         item.into()
+    //     })
+    // }
 
     /// Returns a draining Iterator, consuming the range of items specified.
     #[inline]
@@ -695,6 +695,19 @@ where
     }
 }
 
+impl <T: 'static, D: TypeUnion> IntoIterator for SelectVec<T, D> {
+    type Item = T;
+    type IntoIter = IntoIter<T, D>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter {
+            iter: self.into_data().into_iter(),
+            marker: PhantomData,
+        }
+    }
+}
+
 pub struct Iter <'a, T, D>
 where
     T: 'a,
@@ -765,6 +778,32 @@ where
     fn next_back(&mut self) -> Option<Self::Item> {
         self.iter.next_back().map(|item| unsafe {
             mem::transmute(item)
+        })
+    }
+}
+
+pub struct IntoIter<T: 'static, D: TypeUnion> {
+    iter: ::std::vec::IntoIter<D::Union>,
+    marker: PhantomData<T>
+}
+
+impl <T: 'static, D: TypeUnion> Iterator for IntoIter<T, D>
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|i| unsafe {
+            let item = SelectItem::<T, D>::from_inner(i);
+            item.into()
+        })
+    }
+}
+
+impl <T: 'static, D: TypeUnion> DoubleEndedIterator for IntoIter<T, D> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back().map(|i| unsafe {
+            let item = SelectItem::<T, D>::from_inner(i);
+            item.into()
         })
     }
 }
