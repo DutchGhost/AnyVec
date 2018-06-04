@@ -168,6 +168,22 @@ where
     }
 
     #[inline]
+    pub fn iter(&self) -> Iter<T, D::Union> {
+        Iter {
+            iter: self.data.iter(),
+            marker: PhantomData
+        }
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> IterMut<T, D::Union> {
+        IterMut {
+            iter: self.data.iter_mut(),
+            marker: PhantomData
+        }
+    }
+
+    #[inline]
     pub fn change_type<S>(self) -> SelectSlice<'a, <D as Select<S>>::Output, D>
     where
         S: Selector, D: Select<S>
@@ -200,16 +216,6 @@ where
         }
 
         SelectSlice {data, marker: PhantomData}
-    }
-
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
-        self.data.iter().map(|item| unsafe { mem::transmute(item) })
-    }
-
-    #[inline]
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.data.iter_mut().map(|item| unsafe { mem::transmute(item) })
     }
 }
 
