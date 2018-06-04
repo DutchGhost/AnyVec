@@ -302,15 +302,20 @@ where
 
     /// Returns a by-reference Iterator over the items contained in the Vector.
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
-        self.data.iter().map(|item| unsafe { mem::transmute(item) })
+    pub fn iter(&self) -> Iter<T, D::Union> {
+        Iter {
+            iter: self.data.iter(),
+            marker: PhantomData,
+        }
     }
 
     /// Returns a by-mutable-reference Iterator over the items contained in the Vector.
     /// This allows for mutation.
-    #[inline]
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.data.iter_mut().map(|item| unsafe { mem::transmute(item) })
+    pub fn iter_mut(&mut self) -> IterMut<T, D::Union> {
+        IterMut {
+            iter: self.data.iter_mut(),
+            marker: PhantomData,
+        }
     }
 
     /// Returns a by-value Iterator over the items contained in the Vector.
@@ -687,6 +692,80 @@ where
             data,
             marker: PhantomData
         }
+    }
+}
+
+pub struct Iter <'a, T, D>
+where
+    T: 'a,
+    D: 'a,
+{
+    iter: ::std::slice::Iter<'a, D>,
+    marker: PhantomData<&'a T>
+}
+
+impl <'a, T, D> Iterator for Iter<'a, T, D>
+where
+    T: 'a,
+    D: 'a,
+{
+    type Item = &'a T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|item| unsafe {
+            mem::transmute(item)
+        })
+    }
+}
+
+impl <'a, T, D> DoubleEndedIterator for Iter <'a, T, D>
+where
+    T: 'a,
+    D: 'a,
+{
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back().map(|item| unsafe {
+            mem::transmute(item)
+        })
+    }
+}
+
+pub struct IterMut<'a, T, D>
+where
+    T: 'a,
+    D: 'a,
+{
+    iter: ::std::slice::IterMut<'a, D>,
+    marker: PhantomData<&'a mut T>
+}
+
+impl <'a, T, D> Iterator for IterMut<'a, T, D>
+where
+    T: 'a,
+    D: 'a,
+{
+    type Item = &'a mut T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|item| unsafe {
+            mem::transmute(item)
+        })
+    }
+}
+
+impl <'a, T, D> DoubleEndedIterator for IterMut<'a, T, D>
+where
+    T: 'a,
+    D: 'a
+{
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back().map(|item| unsafe {
+            mem::transmute(item)
+        })
     }
 }
 
