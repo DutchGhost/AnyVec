@@ -168,19 +168,14 @@ where
     }
 
     #[inline]
-    pub fn iter(&self) -> Iter<T, D::Union> {
-        Iter {
-            iter: self.data.iter(),
-            marker: PhantomData
-        }
+    pub fn iter(&'a self) -> impl Iterator<Item = &'a T> + DoubleEndedIterator {
+        self.data.iter().map(|item| unsafe { mem::transmute(item) })
     }
 
-    #[inline]
-    pub fn iter_mut(&mut self) -> IterMut<T, D::Union> {
-        IterMut {
-            iter: self.data.iter_mut(),
-            marker: PhantomData
-        }
+    /// Returns a by-mutable-reference Iterator over the items contained in the Vector.
+    /// This allows for mutation.
+    pub fn iter_mut(&'a mut self) -> impl Iterator<Item = &'a mut T> + DoubleEndedIterator {
+        self.data.iter_mut().map(|item| unsafe { mem::transmute(item) })
     }
 
     #[inline]
@@ -308,20 +303,14 @@ where
 
     /// Returns a by-reference Iterator over the items contained in the Vector.
     #[inline]
-    pub fn iter(&self) -> Iter<T, D::Union> {
-        Iter {
-            iter: self.data.iter(),
-            marker: PhantomData,
-        }
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T> + DoubleEndedIterator {
+        self.data.iter().map(|item| unsafe { mem::transmute(item) })
     }
 
     /// Returns a by-mutable-reference Iterator over the items contained in the Vector.
     /// This allows for mutation.
-    pub fn iter_mut(&mut self) -> IterMut<T, D::Union> {
-        IterMut {
-            iter: self.data.iter_mut(),
-            marker: PhantomData,
-        }
+    pub fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T> + DoubleEndedIterator {
+        self.data.iter_mut().map(|item| unsafe { mem::transmute(item) })
     }
 
     // /// Returns a by-value Iterator over the items contained in the Vector.
@@ -392,10 +381,15 @@ where
 
     /// With this function, you can change the type the Vector holds in place.
     /// This does not allocate new space.
-    /// Notice that this function to take a Generic parameter:
-    ///     - 'A' will change the type to the first of the types provided at creation of the SelectVec.
-    ///     - 'B' will change the type to the second of the types provided at creation of the SelectVec.
-    ///     - 'C' will change the type to the third of the types provided at creation of the SelectVec.
+    /// Notice that this function has to take a Generic parameter:
+    /// 
+    /// - 'A' will change the type to the first of the types provided at creation of the SelectVec.
+    /// 
+    /// - 'B' will change the type to the second of the types provided at creation of the SelectVec.
+    /// 
+    /// - 'C' will change the type to the third of the types provided at creation of the SelectVec.
+    /// 
+    /// - etc, etc.
     /// 
     /// If the type the closure returns does not match with the new selected type, you will get a compiler error.
     /// 
@@ -420,7 +414,6 @@ where
     ///     assert_eq!(iter.next(), Some(&Ok(30)));
     ///     assert_eq!(iter.next(), Some(&Ok(40)));
     /// }
-    ///
     ///
     /// ```
     /// 
@@ -526,6 +519,8 @@ where
     /// Note that this can only be done when the Alignment of the Union `D`,
     /// is equal to the alignment of the current held type.
     /// 
+    /// If you want to change the data-type before converthing into a Vector, use [`SelectVec::try_to_vec_map()`]
+    /// 
     /// # Examples
     /// ```
     /// use selectvec::{B, selectvec::SelectVec};
@@ -617,6 +612,9 @@ where
     /// assert_eq!(iter.next(), Some(String::from("4")));
     /// assert_eq!(iter.next(), None);
     /// ```
+    /// 
+    /// # Safety
+    /// If the closure panics, the internal Vector is leaked. 
     #[inline]
     pub fn try_to_vec_map<S: Selector, F>(self, f: F) -> Vec<<D as Select<S>>::Output>
     where
@@ -816,6 +814,26 @@ impl <T: 'static, D: TypeUnion> DoubleEndedIterator for IntoIter<T, D> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_rev_iter() {
+        use super::*;
+
+        let mut vec = (0..10).collect::<SelectVec<u32, (u32, ())>>();
+
+        let mut iter = vec.iter().rev();
+
+        assert_eq!(iter.next(), Some(&9));
+        assert_eq!(iter.next(), Some(&8));
+        assert_eq!(iter.next(), Some(&7));
+        assert_eq!(iter.next(), Some(&6));
+        assert_eq!(iter.next(), Some(&5));
+        assert_eq!(iter.next(), Some(&4));
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next(), Some(&0));
+        assert_eq!(iter.next(), None);
+    }
     #[test]
     fn convertion_test() {
         use super::*;
