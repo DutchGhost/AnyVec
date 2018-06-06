@@ -167,14 +167,15 @@ where
         type_id::<T>()
     }
 
+    /// Returns a by-reference Iterator over the items contained in the Vector.
     #[inline]
-    pub fn iter(&'a self) -> impl Iterator<Item = &'a T> + DoubleEndedIterator {
+    pub fn iter(&'a self) -> impl DoubleEndedIterator<Item = &'a T> {
         self.data.iter().map(|item| unsafe { mem::transmute(item) })
     }
 
     /// Returns a by-mutable-reference Iterator over the items contained in the Vector.
     /// This allows for mutation.
-    pub fn iter_mut(&'a mut self) -> impl Iterator<Item = &'a mut T> + DoubleEndedIterator {
+    pub fn iter_mut(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut T> {
         self.data.iter_mut().map(|item| unsafe { mem::transmute(item) })
     }
 
@@ -303,13 +304,13 @@ where
 
     /// Returns a by-reference Iterator over the items contained in the Vector.
     #[inline]
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T> + DoubleEndedIterator {
+    pub fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a T> {
         self.data.iter().map(|item| unsafe { mem::transmute(item) })
     }
 
     /// Returns a by-mutable-reference Iterator over the items contained in the Vector.
     /// This allows for mutation.
-    pub fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T> + DoubleEndedIterator {
+    pub fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut T> {
         self.data.iter_mut().map(|item| unsafe { mem::transmute(item) })
     }
 
@@ -325,7 +326,7 @@ where
 
     /// Returns a draining Iterator, consuming the range of items specified.
     #[inline]
-    pub fn drain<'a, R>(&'a mut self, r: R) -> impl Iterator<Item = T> + 'a
+    pub fn drain<'a, R>(&'a mut self, r: R) -> impl DoubleEndedIterator<Item = T> + 'a
     where
         R: ::std::ops::RangeBounds<usize>
     {
