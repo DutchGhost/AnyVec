@@ -1,4 +1,4 @@
-use selectvec::{TypeSelect, TypeUnion, type_id, Select, Selector};
+use selectvec::{type_id, Select, Selector, TypeSelect, TypeUnion};
 
 #[macro_export]
 macro_rules! contains_type {
@@ -82,25 +82,13 @@ macro_rules! select {
 
 Zstruct!(A, B, C, D, E, F, G, H, I, J);
 
-select!(
-    NAMES = [A, B],
-    GENERICS = [AA, BB]
-);
+select!(NAMES = [A, B], GENERICS = [AA, BB]);
 
-select!(
-    NAMES = [A, B, C],
-    GENERICS = [AA, BB, CC]
-);
+select!(NAMES = [A, B, C], GENERICS = [AA, BB, CC]);
 
-select!(
-    NAMES = [A, B, C, D],
-    GENERICS = [AA, BB, CC, DD]
-);
+select!(NAMES = [A, B, C, D], GENERICS = [AA, BB, CC, DD]);
 
-select!(
-    NAMES = [A, B, C, D, E],
-    GENERICS = [AA, BB, CC, DD, EE]
-);
+select!(NAMES = [A, B, C, D, E], GENERICS = [AA, BB, CC, DD, EE]);
 
 select!(
     NAMES = [A, B, C, D, E, F],
@@ -126,7 +114,6 @@ select!(
     NAMES = [A, B, C, D, E, F, G, H, I, J],
     GENERICS = [AA, BB, CC, DD, EE, FF, GG, HH, II, JJ]
 );
-
 
 macro_rules! Union {
     (pub union $name:ident {
@@ -197,7 +184,7 @@ macro_rules! GenUnion {
 
 GenUnion!(
     NAMES = [Union10, Union9, Union8, Union7, Union6, Union5, Union4, Union3, Union2],
-    FIELDS = [a: A,    b: B,   c: C,   d: D,   e: E,   f: F,   g: G,   h: H,   i: I,   j: J]
+    FIELDS = [a: A, b: B, c: C, d: D, e: E, f: F, g: G, h: H, i: I, j: J]
 );
 
 // Union!(pub union Union2 {
