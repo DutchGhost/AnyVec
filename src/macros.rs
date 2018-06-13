@@ -142,7 +142,7 @@ macro_rules! Union {
         {}
 
         impl <$($generics),*> $name<$($generics),*> {
-            
+
             /// Indexes into `self`, cloning the contained value.
             /// This is marked unsafe, because the type bein cloned is not known at compiletime.
             /// This means the clone could end up in garbage.
@@ -151,8 +151,10 @@ macro_rules! Union {
                 ($($generics),*): Select<S>,
                 <($($generics),*) as Select<S>>::Output: Clone
             {
-                let output = ::std::mem::transmute::<&Self, &<($($generics),*) as Select<S>>::Output>(self);
-                
+                //let output = ::std::mem::transmute::<&Self, &<($($generics),*) as Select<S>>::Output>(self);
+
+                let output = &*(self as *const Self as *const <($($generics),*) as Select<S>>::Output);
+
                 output.clone()
             }
         }

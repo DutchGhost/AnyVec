@@ -131,7 +131,8 @@ where
 {
     #[inline]
     fn as_ref(&self) -> &T {
-        unsafe { mem::transmute(&self.data) }
+        //unsafe { mem::transmute(&self.data) }
+        unsafe { &*(&self.data as *const <D as TypeUnion>::Union as *const T) }
     }
 }
 
@@ -141,7 +142,8 @@ where
 {
     #[inline]
     fn as_mut(&mut self) -> &mut T {
-        unsafe { mem::transmute(&mut self.data) }
+        //unsafe { mem::transmute(&mut self.data) }
+        unsafe { &mut *(&mut self.data as *mut <D as TypeUnion>::Union as *mut T) }
     }
 }
 
@@ -178,15 +180,22 @@ where
     /// Returns a by-reference Iterator over the items contained in the Vector.
     #[inline]
     pub fn iter(&'a self) -> impl DoubleEndedIterator<Item = &'a T> {
-        self.data.iter().map(|item| unsafe { mem::transmute(item) })
+        //self.data.iter().map(|item| unsafe { mem::transmute(item) })
+        self.data
+            .iter()
+            .map(|item| unsafe { &*(item as *const <D as TypeUnion>::Union as *const T) })
     }
 
     /// Returns a by-mutable-reference Iterator over the items contained in the Vector.
     /// This allows for mutation.
     pub fn iter_mut(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut T> {
+        // self.data
+        //     .iter_mut()
+        //     .map(|item| unsafe { mem::transmute(item) })
+
         self.data
             .iter_mut()
-            .map(|item| unsafe { mem::transmute(item) })
+            .map(|item| unsafe { &mut *(item as *mut <D as TypeUnion>::Union as *mut T) })
     }
 
     #[inline]
@@ -230,7 +239,7 @@ where
 }
 
 /// A Vector that can hold multiple data-types, and switch to those data-types, without losing its allocated space.
-#[derive(Ord, PartialOrd, Eq, PartialEq, Clone)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Default)]
 pub struct SelectVec<T, D>
 where
     T: 'static,
@@ -275,6 +284,11 @@ where
         self.data.len()
     }
 
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
     /// Returns the capacity of the underlying Vector.
     #[inline]
     pub fn capacity(&self) -> usize {
@@ -313,16 +327,23 @@ where
 
     /// Returns a by-reference Iterator over the items contained in the Vector.
     #[inline]
-    pub fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a T> {
-        self.data.iter().map(|item| unsafe { mem::transmute(item) })
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &T> {
+        //self.data.iter().map(|item| unsafe { mem::transmute(item) })
+        self.data
+            .iter()
+            .map(|item| unsafe { &*(item as *const <D as TypeUnion>::Union as *const T) })
     }
 
     /// Returns a by-mutable-reference Iterator over the items contained in the Vector.
     /// This allows for mutation.
-    pub fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut T> {
+    pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut T> {
+        // self.data
+        //     .iter_mut()
+        //     .map(|item| unsafe { mem::transmute(item) })
+
         self.data
             .iter_mut()
-            .map(|item| unsafe { mem::transmute(item) })
+            .map(|item| unsafe { &mut *(item as *mut <D as TypeUnion>::Union as *mut T) })
     }
 
     // /// Returns a by-value Iterator over the items contained in the Vector.
@@ -602,11 +623,7 @@ where
                 let nonnull = ptr::NonNull::new(base_read_ptr).unwrap();
                 let layout = Layout::array::<D::Union>(old_cap).unwrap();
 
-                let _ = Global.realloc(
-                    nonnull.as_opaque(),
-                    layout,
-                    new_capacity * mem::size_of::<T>(),
-                );
+                let _ = Global.realloc(nonnull.cast(), layout, new_capacity * mem::size_of::<T>());
             }
 
             Vec::from_raw_parts(base_write_ptr, len, new_capacity)
@@ -686,7 +703,7 @@ where
                 let layout = Layout::array::<D::Union>(old_cap).unwrap();
 
                 let _ = Global.realloc(
-                    nonnull.as_opaque(),
+                    nonnull.cast(),
                     layout,
                     new_capacity * mem::size_of::<<D as Select<S>>::Output>(),
                 );
@@ -756,7 +773,9 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|item| unsafe { mem::transmute(item) })
+        self.iter
+            .next()
+            .map(|item| unsafe { &*(item as *const D as *const T) })
     }
 }
 
@@ -769,7 +788,7 @@ where
     fn next_back(&mut self) -> Option<Self::Item> {
         self.iter
             .next_back()
-            .map(|item| unsafe { mem::transmute(item) })
+            .map(|item| unsafe { &*(item as *const D as *const T) })
     }
 }
 
@@ -791,7 +810,9 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|item| unsafe { mem::transmute(item) })
+        self.iter
+            .next()
+            .map(|item| unsafe { &mut *(item as *mut D as *mut T) })
     }
 }
 
@@ -804,7 +825,7 @@ where
     fn next_back(&mut self) -> Option<Self::Item> {
         self.iter
             .next_back()
-            .map(|item| unsafe { mem::transmute(item) })
+            .map(|item| unsafe { &mut *(item as *mut D as *mut T) })
     }
 }
 
