@@ -2,6 +2,13 @@ use std::any::TypeId;
 
 use select::{TypeSelect, TypeUnion};
 
+macro_rules! doc_comment {
+    ($x:expr, $($tt:tt),*) => {
+        #[doc = $x]
+        $($tt)*
+    };
+}
+
 /// Returns the TypeId of `T`
 pub(crate) const fn type_id<T: 'static>() -> TypeId {
     TypeId::of::<T>()
@@ -22,28 +29,30 @@ macro_rules! Union {
         /* @TODO: Fix the doc's for this.
          * It should say something like 'This union can hold the following Generics: $($generics),*
          */
-        #[doc = $d]
-        #[derive(Copy, Clone)]
-        pub union $name<$($generics),*> {
-            $($fieldnames: $generics,)*
-        }
-
-        impl <$($generics),*> TypeUnion for ($($generics),*)
-        where
-            $($generics: 'static),*
-        {
-            type Union = $name<$($generics),*>;
-
-            #[inline]
-            fn contains<T: 'static>() -> bool {
-                contains_type!(T, [$($generics),*])
+        doc_comment!(
+            concat!("This union can hold the following Generics: ", stringify!($($generics),*)),
+            #[derive(Copy, Clone)]
+            pub union $name<$($generics),*> {
+                $($fieldnames: $generics,)*
             }
-        }
 
-        unsafe impl <$($generics),*> TypeSelect<($($generics),*)> for $name<$($generics),*>
-        where
-            $($generics: 'static),*
-        {}
+            impl <$($generics),*> TypeUnion for ($($generics),*)
+            where
+                $($generics: 'static),*
+            {
+                type Union = $name<$($generics),*>;
+
+                #[inline]
+                fn contains<T: 'static>() -> bool {
+                    contains_type!(T, [$($generics),*])
+                }
+            }
+
+            unsafe impl <$($generics),*> TypeSelect<($($generics),*)> for $name<$($generics),*>
+            where
+                $($generics: 'static),*
+            {}
+        );
     )
 }
 
