@@ -18,4 +18,6 @@ pub mod select;
 pub mod union;
 pub mod index;
 
+pub mod collections;
+
 pub use union::type_id;
