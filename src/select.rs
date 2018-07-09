@@ -97,8 +97,10 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
 
     /// Returns the underlying Union.
     #[inline]
-    pub fn into_inner(self) -> U::Union {
-        self.data
+    pub fn into_inner(mut self) -> U::Union {
+        let data = unsafe { ptr::read(&mut self.data) };
+        mem::forget(self);
+        data
     }
 }
 
@@ -141,5 +143,19 @@ where
         let clone_of_t = self.deref().clone();
 
         Self::from(clone_of_t)
+    }
+}
+
+// @TODO: Check if this is sound
+impl<T, U: TypeUnion> Drop for SelectHandle<T, U> {
+    fn drop(&mut self) {
+        // `T` is the current held type.
+        if mem::needs_drop::<T>() {
+            unsafe {
+                let mut t = ptr::read(self.deref_mut());
+
+                ptr::drop_in_place::<T>(&mut t);
+            }
+        }
     }
 }

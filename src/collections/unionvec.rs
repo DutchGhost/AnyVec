@@ -44,8 +44,8 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     /// the union-vector will have a zero length.
     ///
     /// # Examples
-    ///
-    /// extern create unioncollections;
+    /// ```
+    /// extern crate unioncollections;
     ///
     /// use unioncollections::collections::unionvec::UnionVec;
     ///
@@ -106,7 +106,64 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
         U: Select<S>,
         F: Fn(T) -> <U as Select<S>>::Output,
     {
-        unimplemented!()
+        /*
+         * 1) Get the underlying Vec
+         * 2) Get the length of the vec
+         * 3) Set the vector's length to 0 (panic safety)
+         * 4) Make a ptr to the start of the Vec,
+         * 5) Loop for i in 0..length,
+         * 6) for every i, get the i'th offset from the ptr,
+         * 7) make a SelectHandle from the i'th element
+         * 8) convert into T,
+         * 9) call function
+         * 10) make SelectHandle with output,
+         * 11) write to the i'th index
+         * 12) restore the length
+         */
+
+        // 1
+        let mut data = self.into_data();
+
+        // 2
+        let len = data.len();
+
+        unsafe {
+            // 3
+            data.set_len(0);
+
+            // 4
+            let ptr = data.as_mut_ptr();
+
+            // 5
+            for i in 0..len as isize {
+                // 6
+                let item_ptr: *mut U::Union = ptr.offset(i);
+
+                // 7
+                let union_t: SelectHandle<T, U> = SelectHandle::from_inner(ptr::read(item_ptr));
+
+                // 8
+                let t: T = union_t.into();
+
+                // 9
+                let u = f(t);
+
+                // 10
+                let union_u: SelectHandle<<U as Select<S>>::Output, U> =
+                    SelectHandle::from_unchecked(u);
+
+                // 11
+                ptr::write(item_ptr, union_u.into_inner());
+            }
+
+            // 12
+            data.set_len(len);
+        }
+
+        UnionVec {
+            data: data,
+            marker: PhantomData,
+        }
     }
 
     #[inline]
@@ -121,5 +178,23 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     #[inline]
     pub fn into_vec(self) -> Vec<T> {
         unimplemented!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use index::{Type1, Type2};
+    #[test]
+    fn test_unionvec_change_to() {
+        let mut union_vec = UnionVec::<String, (String, u64)>::new();
+        union_vec.push(String::from("test"));
+        assert_eq!(union_vec.pop(), Some(String::from("test")));
+
+        let mut union_vec = union_vec.change_to::<Type2>();
+        union_vec.push(10);
+
+        assert_eq!(union_vec.len(), 1);
+        assert_eq!(union_vec.pop(), Some(10));
     }
 }
