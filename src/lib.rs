@@ -9,8 +9,11 @@
 extern crate core;
 pub mod selectvec;
 
-pub mod select;
-pub mod union;
 
 mod macros;
 pub use macros::*;
+
+// Modularized.
+pub mod select;
+pub mod union;
+pub mod index;
