@@ -197,4 +197,18 @@ mod tests {
         assert_eq!(union_vec.len(), 1);
         assert_eq!(union_vec.pop(), Some(10));
     }
+
+    #[test]
+    fn test_unionvec_map() {
+        let mut union_vec = UnionVec::<&str, (&str, u64)>::new();
+
+        for s in vec!["10", "20", "30", "40"] {
+            union_vec.push(s);
+        }
+
+        let mut union_vec = union_vec.map::<Type2, _>(|s| s.parse().unwrap());
+
+        assert_eq!(union_vec.len(), 4);
+        assert_eq!(union_vec.pop(), Some(40));
+    }
 }

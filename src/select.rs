@@ -24,11 +24,8 @@ pub unsafe trait TypeSelect<U: TypeUnion>: Sized {
     #[inline]
     unsafe fn cast<T: 'static>(self) -> T {
         debug_assert!(U::contains::<T>());
-
         let mut s = mem::uninitialized();
-
         ptr::write(&mut s as *mut _ as *mut Self, self);
-
         s
     }
 
@@ -60,25 +57,18 @@ pub struct SelectHandle<T, U: TypeUnion> {
     marker: PhantomData<T>,
 }
 
-impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
+impl<T, U: TypeUnion> SelectHandle<T, U> {
     /// Creates a new Union, and writes the given value to it.
     #[inline]
     pub unsafe fn from_unchecked(t: T) -> Self {
         let mut s = mem::uninitialized();
-
         ptr::write(&mut s as *mut _ as *mut T, t);
-
         s
     }
 
     /// Converts `self` into `T`.
     #[inline]
     pub fn into(mut self) -> T {
-        /*
-         * 1) read the value of self, but as T
-         * 2) forget self, so we dont drop.
-         * 3) return t
-         */
         unsafe {
             let t = ptr::read(&mut self as *mut _ as *mut T);
             mem::forget(self);
@@ -104,7 +94,7 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     }
 }
 
-impl<T: 'static, U: TypeUnion> From<T> for SelectHandle<T, U> {
+impl<T, U: TypeUnion> From<T> for SelectHandle<T, U> {
     #[inline]
     fn from(t: T) -> Self {
         unsafe { Self::from_unchecked(t) }
@@ -135,7 +125,7 @@ impl<T: fmt::Debug, U: TypeUnion> fmt::Debug for SelectHandle<T, U> {
 }
 
 // @TODO: Fix this.
-impl<T: 'static, U: TypeUnion> Clone for SelectHandle<T, U>
+impl<T, U: TypeUnion> Clone for SelectHandle<T, U>
 where
     T: Clone,
 {
@@ -152,9 +142,7 @@ impl<T, U: TypeUnion> Drop for SelectHandle<T, U> {
         // `T` is the current held type.
         if mem::needs_drop::<T>() {
             unsafe {
-                let mut t = ptr::read(self.deref_mut());
-
-                ptr::drop_in_place::<T>(&mut t);
+                ptr::drop_in_place::<T>(self.deref_mut());
             }
         }
     }
