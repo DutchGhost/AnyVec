@@ -8,7 +8,7 @@ pub(crate) const fn type_id<T: 'static>() -> TypeId {
 }
 
 #[macro_export]
-macro_rules! _contains_type {
+macro_rules! contains_type {
     ($T:ty, [$($O:ty),*]) => (
         false $(|| type_id::<$T>() == type_id::<$O>())*
     )
@@ -19,6 +19,9 @@ macro_rules! Union {
         pub union $name:ident {
         $($fieldnames:ident: $generics:tt),*
     }) => (
+        /* @TODO: Fix the doc's for this.
+         * It should say something like 'This union can hold the following Generics: $($generics),*
+         */
         #[doc = $d]
         #[derive(Copy, Clone)]
         pub union $name<$($generics),*> {
@@ -33,7 +36,7 @@ macro_rules! Union {
 
             #[inline]
             fn contains<T: 'static>() -> bool {
-                _contains_type!(T, [$($generics),*])
+                contains_type!(T, [$($generics),*])
             }
         }
 
@@ -55,7 +58,7 @@ macro_rules! GenUnion {
         FIELDS = [$fieldname:ident: $generic:ident $(,$fieldnames:ident: $generics:ident)*]
     ) => {
         Union!(
-            "A Union",
+            "This union can hold the following Generics: ",
             pub union $name {
             $fieldname: $generic
             $(, $fieldnames: $generics)*
