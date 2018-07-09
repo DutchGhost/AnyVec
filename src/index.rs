@@ -15,7 +15,7 @@ macro_rules! IndexStruct {
     () => ();
 }
 
-IndexStruct!(A, B, C, D, E, F, G, H, I, J);
+IndexStruct!(Type1, Type2, Type3, Type4, Type5, Type6, Type7, Type8, Type9, Type10);
 
 macro_rules! impl_select {
     (
@@ -80,27 +80,33 @@ macro_rules! select {
  *      print(totall)
  */
 
-select!(NAMES = [A, B], GENERICS = [AA, BB]);
-select!(NAMES = [A, B, C], GENERICS = [AA, BB, CC]);
-select!(NAMES = [A, B, C, D], GENERICS = [AA, BB, CC, DD]);
-select!(NAMES = [A, B, C, D, E], GENERICS = [AA, BB, CC, DD, EE]);
+select!(NAMES = [Type1, Type2], GENERICS = [A, B]);
+select!(NAMES = [Type1, Type2, Type3], GENERICS = [A, B, C]);
 select!(
-    NAMES = [A, B, C, D, E, F],
-    GENERICS = [AA, BB, CC, DD, EE, FF]
+    NAMES = [Type1, Type2, Type3, Type4],
+    GENERICS = [A, B, C, D]
 );
 select!(
-    NAMES = [A, B, C, D, E, F, G],
-    GENERICS = [AA, BB, CC, DD, EE, FF, GG]
+    NAMES = [Type1, Type2, Type3, Type4, Type5],
+    GENERICS = [A, B, C, D, E]
 );
 select!(
-    NAMES = [A, B, C, D, E, F, G, H],
-    GENERICS = [AA, BB, CC, DD, EE, FF, GG, HH]
+    NAMES = [Type1, Type2, Type3, Type4, Type5, Type6],
+    GENERICS = [A, B, C, D, E, F]
 );
 select!(
-    NAMES = [A, B, C, D, E, F, G, H, I],
-    GENERICS = [AA, BB, CC, DD, EE, FF, GG, HH, II]
+    NAMES = [Type1, Type2, Type3, Type4, Type5, Type6, Type7],
+    GENERICS = [A, B, C, D, E, F, G]
 );
 select!(
-    NAMES = [A, B, C, D, E, F, G, H, I, J],
-    GENERICS = [AA, BB, CC, DD, EE, FF, GG, HH, II, JJ]
+    NAMES = [Type1, Type2, Type3, Type4, Type5, Type6, Type7, Type8],
+    GENERICS = [A, B, C, D, E, F, G, H]
+);
+select!(
+    NAMES = [Type1, Type2, Type3, Type4, Type5, Type6, Type7, Type8, Type9],
+    GENERICS = [A, B, C, D, E, F, G, H, I]
+);
+select!(
+    NAMES = [Type1, Type2, Type3, Type4, Type5, Type6, Type7, Type8, Type9, Type10],
+    GENERICS = [A, B, C, D, E, F, G, H, I, J]
 );
