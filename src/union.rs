@@ -3,7 +3,7 @@ use std::any::TypeId;
 use select::{TypeSelect, TypeUnion};
 
 macro_rules! doc_comment {
-    ($x:expr, $($tt:tt),*) => {
+    ($x:expr, $($tt:tt)*) => {
         #[doc = $x]
         $($tt)*
     };
@@ -26,9 +26,6 @@ macro_rules! Union {
         pub union $name:ident {
         $($fieldnames:ident: $generics:tt),*
     }) => (
-        /* @TODO: Fix the doc's for this.
-         * It should say something like 'This union can hold the following Generics: $($generics),*
-         */
         doc_comment!(
             concat!("This union can hold the following Generics: ", stringify!($($generics),*)),
             #[derive(Copy, Clone)]
