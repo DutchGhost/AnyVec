@@ -129,6 +129,7 @@ impl<T, U: TypeUnion> Clone for SelectHandle<T, U>
 where
     T: Clone,
 {
+    #[inline]
     fn clone(&self) -> Self {
         let clone_of_t = self.deref().clone();
 
@@ -136,14 +137,11 @@ where
     }
 }
 
-// @TODO: Check if this is sound
 impl<T, U: TypeUnion> Drop for SelectHandle<T, U> {
     fn drop(&mut self) {
         // `T` is the current held type.
-        if mem::needs_drop::<T>() {
-            unsafe {
-                ptr::drop_in_place::<T>(self.deref_mut());
-            }
+        unsafe {
+            ptr::drop_in_place::<T>(self.deref_mut());
         }
     }
 }

@@ -67,6 +67,11 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     }
 
     #[inline]
+    pub fn capacity(&self) -> usize {
+        self.data.capacity()
+    }
+
+    #[inline]
     pub fn push(&mut self, item: T) {
         let item = SelectHandle::<T, U>::from(item);
         self.data.push(item.into_inner())
@@ -100,6 +105,30 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
         }
     }
 
+    /// For each element in the collection, the closure is called.
+    /// The closure may return any type the Union can turn into. Any closure that does not return
+    /// a type the Union can turn into, will result in a compiletime error.
+    ///
+    /// # Examples
+    /// ```
+    /// extern crate unioncollections;
+    /// use unioncollections::collections::unionvec::UnionVec;
+    /// use unioncollections::index::Type2;
+    ///
+    /// let mut union_vec = UnionVec::<&str, (&str, u64)>::new();
+    ///
+    /// for s in vec!["10", "20", "30", "40"] {
+    ///     union_vec.push(s);
+    /// }
+    ///
+    /// let mut union_vec = union_vec.map::<Type2, _>(|s| s.parse().unwrap());
+    ///
+    /// assert_eq!(union_vec.len(), 4);
+    /// assert_eq!(union_vec.pop(), Some(40));
+    ///   ```
+    /// # Panic
+    ///
+    /// When the closure panics, the internal Vector is leaked.
     #[inline]
     pub fn map<S: Selector, F>(self, f: F) -> UnionVec<<U as Select<S>>::Output, U>
     where
@@ -161,18 +190,88 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
         }
 
         UnionVec {
-            data: data,
+            data,
             marker: PhantomData,
         }
     }
 
+    /// For each element in the collection, the closure is called. The closure returns an Option,
+    /// indicating wheter an element should be written back to the collection. All closure outputs
+    /// resulting in `Some` will be written, all closure outputs resulting in `None`, will not be
+    /// written.
+    ///
+    /// Note that altough some elements might result in `None`, the capacity of the underlying
+    /// collection does not change.
+    ///
+    /// # Examples
+    /// ```
+    /// extern crate unioncollections;
+    ///
+    /// use unioncollections::collections::unionvec::UnionVec;
+    /// use unioncollections::index::Type2;
+    ///
+    /// let mut union_vec = UnionVec::<&str, (&str, u64)>::new();
+    /// for s in vec!["10", "20", "30", "40e"] {
+    ///     union_vec.push(s);
+    /// }
+    ///
+    /// // Notice the <Type2, _> here, the underscore is the closure, which is infered.
+    /// let mut union_vec = union_vec.filter_map::<Type2, _>(|s| s.parse().ok());
+    ///
+    /// // the last parse failed, so there are only 3 items in the vec.
+    ///
+    /// assert_eq!(union_vec.len(), 3);
+    ///
+    /// // the capacity is still 4!
+    /// assert_eq!(union_vec.capacity(), 4);
+    /// ```
+    /// # Panic
+    ///
+    /// When the closure panics, the internal Vector is leaked.
     #[inline]
     pub fn filter_map<S: Selector, F>(self, f: F) -> UnionVec<<U as Select<S>>::Output, U>
     where
         U: Select<S>,
         F: Fn(T) -> Option<<U as Select<S>>::Output>,
     {
-        unimplemented!()
+        let mut data = self.into_data();
+        let len = data.len();
+        let mut nones: usize = 0;
+
+        unsafe {
+            data.set_len(0);
+
+            let ptr = data.as_mut_ptr();
+
+            for i in 0..len as isize {
+                let read_ptr: *mut U::Union = ptr.offset(i);
+                let write_ptr: *mut U::Union = ptr.offset(i - nones as isize);
+
+                let union_t: SelectHandle<T, U> = SelectHandle::from_inner(ptr::read(read_ptr));
+
+                let t = union_t.into();
+
+                let u = match f(t) {
+                    Some(item) => item,
+                    None => {
+                        nones += 1;
+
+                        continue;
+                    }
+                };
+
+                let union_u: SelectHandle<<U as Select<S>>::Output, U> =
+                    SelectHandle::from_unchecked(u);
+                ptr::write(write_ptr, union_u.into_inner());
+            }
+
+            data.set_len(len - nones);
+        }
+
+        UnionVec {
+            data,
+            marker: PhantomData,
+        }
     }
 
     #[inline]
@@ -199,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unionvec_map() {
+    fn test_union_vec_map() {
         let mut union_vec = UnionVec::<&str, (&str, u64)>::new();
 
         for s in vec!["10", "20", "30", "40"] {
@@ -210,5 +309,22 @@ mod tests {
 
         assert_eq!(union_vec.len(), 4);
         assert_eq!(union_vec.pop(), Some(40));
+    }
+
+    #[test]
+    fn test_union_filter_map() {
+        let mut union_vec = UnionVec::<&str, (&str, u64)>::new();
+
+        for s in vec!["10", "20", "30", "40e"] {
+            union_vec.push(s);
+        }
+
+        let mut union_vec = union_vec.filter_map::<Type2, _>(|s| s.parse().ok());
+
+        // the last parse failed, so there are only 3 items in the vec.
+        assert_eq!(union_vec.len(), 3);
+
+        // the capacity is still 4!
+        assert_eq!(union_vec.capacity(), 4);
     }
 }
