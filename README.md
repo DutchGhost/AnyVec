@@ -1,5 +1,5 @@
-# anyvec
-Collection that can hold any type, and can be converted into a collection that holds another type, in place.
+# UnionCollections
+This crate offers multiple collections that hold unions, so the collection can change from types with minimal overhead.
 
 # Contributors
 - S3bk, designed most of the types.
