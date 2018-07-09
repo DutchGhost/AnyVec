@@ -10,7 +10,7 @@ macro_rules! doc_comment {
 }
 
 /// Returns the TypeId of `T`
-pub(crate) const fn type_id<T: 'static>() -> TypeId {
+pub const fn type_id<T: 'static>() -> TypeId {
     TypeId::of::<T>()
 }
 

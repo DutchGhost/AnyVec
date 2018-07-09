@@ -17,3 +17,5 @@ extern crate core;
 pub mod select;
 pub mod union;
 pub mod index;
+
+pub use union::type_id;
