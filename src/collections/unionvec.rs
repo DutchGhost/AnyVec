@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 use std::mem;
+use std::ptr;
 
-use select::{Select, Selector, TypeUnion};
+use select::{Select, SelectHandle, Selector, TypeSelect, TypeUnion};
 
 /// A UnionVec can be used to hold multiple datatypes, but only one at a time.
 /// It's possible to change between types, but only for all items, and not individually per item.
@@ -15,14 +16,43 @@ pub struct UnionVec<T: 'static, U: TypeUnion> {
 }
 
 impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
+    /// Constructs a new, empty `UnionVec<T, U>`.
+    /// `T` is the current type of the vector, `U` a tuple of types the vector can change to.
+    /// The UnionVector will not allocate until elements are pushed onto it.
+    ///
+    /// # Examples
+    /// ```
+    /// extern crate unioncollections;
+    ///
+    /// use unioncollections::collections::unionvec::UnionVec;
+    ///
+    /// let unionvec = UnionVec::<u32, (u32, usize)>::new();
+    /// ```
     #[inline]
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
-            makrker: PhantomData,
+            marker: PhantomData,
         }
     }
 
+    /// Constructs a new, empty `UnionVec<T, U>` with the specified capacity.
+    /// The UnionVector will be able to hold exactly `capcity` elements with reallocating. If
+    /// `capacity` is 0, the union-vector will not allocate.
+    ///
+    /// It is important to note that altough the returned union-vector has the capacity specified,
+    /// the union-vector will have a zero length.
+    ///
+    /// # Examples
+    ///
+    /// extern create unioncollections;
+    ///
+    /// use unioncollections::collections::unionvec::UnionVec;
+    ///
+    /// let mut v = UnionVec::<String, (String, u32)>::with_capacity(10);
+    ///
+    /// assert_eq!(v.len(), 0);
+    /// ```
     #[inline]
     pub fn with_capacity(n: usize) -> Self {
         Self {
@@ -34,6 +64,17 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     #[inline]
     pub fn len(&self) -> usize {
         self.data.len()
+    }
+
+    #[inline]
+    pub fn push(&mut self, item: T) {
+        let item = SelectHandle::<T, U>::from(item);
+        self.data.push(item.into_inner())
+    }
+
+    #[inline]
+    pub fn pop(&mut self) -> Option<T> {
+        self.data.pop().map(|union| unsafe { union.cast::<T>() })
     }
 
     #[inline]
@@ -53,7 +94,7 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     {
         self.data.clear();
 
-        Self {
+        UnionVec {
             data: self.into_data(),
             marker: PhantomData,
         }

@@ -97,7 +97,7 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
 
     /// Returns the underlying Union.
     #[inline]
-    pub unsafe fn into_inner(self) -> U::Union {
+    pub fn into_inner(self) -> U::Union {
         self.data
     }
 }
