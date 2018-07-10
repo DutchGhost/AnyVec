@@ -4,6 +4,8 @@ use std::ptr;
 
 use select::{Select, SelectHandle, Selector, TypeSelect, TypeUnion};
 
+use std::alloc::{Alloc, Global, Layout};
+
 /// A UnionVec can be used to hold multiple datatypes, but only one at a time.
 /// It's possible to change between types, but only for all items, and not individually per item.
 ///
@@ -275,10 +277,50 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     }
 
     #[inline]
-    pub fn into_vec(self) -> Vec<T> {
-        unimplemented!()
+    pub fn into_vec(self) -> Result<Vec<T>, AlignError> {
+        if mem::align_of::<U::Union>() % mem::align_of::<T>() != 0 {
+            return Err(AlignError);
+        }
+
+        let mut data = self.into_data();
+        let old_cap = data.capacity();
+
+        unsafe {
+            let base_read_ptr = data.as_mut_ptr();
+            let base_write_ptr = base_read_ptr as *mut T;
+
+            let len = data.len();
+            data.set_len(0);
+
+            for i in 0..len as isize {
+                let read_ptr: *mut U::Union = base_read_ptr.offset(i);
+                let write_ptr: *mut T = base_write_ptr.offset(i);
+
+                let union_t: SelectHandle<T, U> = SelectHandle::from_inner(ptr::read(read_ptr));
+                let t = union_t.into();
+
+                ptr::write(write_ptr, t);
+            }
+
+            mem::forget(data);
+
+            let old_cap_in_bytes = old_cap * mem::size_of::<U::Union>();
+            let new_cap = old_cap_in_bytes / mem::size_of::<T>();
+
+            if old_cap_in_bytes % mem::size_of::<T>() != 0 {
+                let nonnull = ptr::NonNull::new(base_read_ptr).unwrap();
+                let layout = Layout::array::<U::Union>(old_cap).unwrap();
+
+                let _ = Global.realloc(nonnull.cast(), layout, new_cap * mem::size_of::<T>());
+            }
+
+            Ok(Vec::from_raw_parts(base_write_ptr, len, new_cap))
+        }
     }
 }
+
+#[derive(Debug)]
+pub struct AlignError;
 
 #[cfg(test)]
 mod tests {
@@ -312,7 +354,7 @@ mod tests {
     }
 
     #[test]
-    fn test_union_filter_map() {
+    fn test_union_vec_filter_map() {
         let mut union_vec = UnionVec::<&str, (&str, u64)>::new();
 
         for s in vec!["10", "20", "30", "40e"] {
@@ -326,5 +368,20 @@ mod tests {
 
         // the capacity is still 4!
         assert_eq!(union_vec.capacity(), 4);
+    }
+
+    #[test]
+    fn test_union_vec_into_vec() {
+        let mut union_vec = UnionVec::<&str, (i64, &str)>::new();
+
+        for s in vec!["10", "20", "30", "40"] {
+            union_vec.push(s);
+        }
+
+        let mut union_vec = union_vec.filter_map::<Type1, _>(|s| s.parse().ok());
+
+        let mut v = union_vec.into_vec().unwrap();
+        assert_eq!(v.capacity(), 8);
+        assert_eq!(v, vec![10, 20, 30, 40]);
     }
 }
