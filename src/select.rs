@@ -5,6 +5,14 @@ use std::ptr;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
+pub(crate) unsafe fn cast_ref<'a, T: 'a, U: 'a>(t_ref: &'a T) -> &'a U {
+    &*(t_ref as *const T as *const U)
+}
+
+pub(crate) unsafe fn cast_refmut<'a, T: 'a, U: 'a>(t_ref: &'a mut T) -> &'a mut U {
+    &mut *(t_ref as *mut T as *mut U)
+}
+
 /// Helper trait to index into a tuple of Generics.
 pub trait Selector {}
 
@@ -115,14 +123,17 @@ impl<T, U: TypeUnion> Deref for SelectHandle<T, U> {
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        unsafe { &*(&self.data as *const <U as TypeUnion>::Union as *const T) }
+        //unsafe { &*(&self.data as *const <U as TypeUnion>::Union as *const T) }
+        //
+        unsafe { cast_ref(&self.data) }
     }
 }
 
 impl<T, U: TypeUnion> DerefMut for SelectHandle<T, U> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *(&mut self.data as *mut <U as TypeUnion>::Union as *mut T) }
+        //unsafe { &mut *(&mut self.data as *mut <U as TypeUnion>::Union as *mut T) }
+        unsafe { cast_refmut(&mut self.data) }
     }
 }
 
