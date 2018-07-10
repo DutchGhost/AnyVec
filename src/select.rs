@@ -2,11 +2,8 @@ use std::fmt;
 use std::mem;
 use std::ptr;
 
-use std::any::TypeId;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
-
-use super::type_id;
 
 /// Helper trait to index into a tuple of Generics.
 pub trait Selector {}
@@ -51,51 +48,19 @@ pub trait TypeUnion: Sized + 'static {
     fn contains<T: 'static>() -> bool;
 }
 
-/// This trait gives information about the type currently held by the union.
-pub trait Typed {
-    /// The current held type.
-    type Current: 'static;
-
-    /// Returns the TypeId of `Self::Current`.
-    fn current_type(&self) -> TypeId {
-        TypeId::of::<Self::Current>()
-    }
-}
-
 /// A wrapper around Unions, that keeps track of the current type using PhantomData.
 pub struct SelectHandle<T, U: TypeUnion> {
     /// The Union itself.
     data: U::Union,
 
     /// A marker field, indicating the current type of the union.
-    marker: PhantomData<T>,
-}
-
-impl<T: 'static, U: TypeUnion> Typed for SelectHandle<T, U> {
-    type Current = T;
-}
-
-impl<'a, T: 'static + Typed> Typed for &'a T {
-    type Current = T::Current;
-}
-
-impl<T: 'static + Typed> Typed for Box<T> {
-    type Current = T::Current;
-}
-
-impl<T1, U1: TypeUnion, T2, U2: TypeUnion> PartialEq<SelectHandle<T1, U1>> for SelectHandle<T2, U2>
-where
-    T2: PartialEq<T1>,
-{
-    fn eq(&self, other: &SelectHandle<T1, U1>) -> bool {
-        self.eq(other)
-    }
+    current: PhantomData<T>,
 }
 
 impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     /// Creates a new Union, and writes the given value to it.
     #[inline]
-    pub unsafe fn from_unchecked(t: <Self as Typed>::Current) -> Self {
+    pub unsafe fn from_unchecked(t: T) -> Self {
         let mut s = mem::uninitialized();
         ptr::write(&mut s as *mut _ as *mut T, t);
         s
@@ -103,7 +68,7 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
 
     /// Converts `self` into `T`.
     #[inline]
-    pub fn into(mut self) -> <Self as Typed>::Current {
+    pub fn into(mut self) -> T {
         unsafe {
             let t = ptr::read(&mut self as *mut _ as *mut T);
             mem::forget(self);
@@ -116,7 +81,7 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     pub unsafe fn from_inner(data: U::Union) -> Self {
         Self {
             data,
-            marker: PhantomData,
+            current: PhantomData,
         }
     }
 
@@ -129,9 +94,18 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     }
 }
 
+impl<T1, U1: TypeUnion, T2, U2: TypeUnion> PartialEq<SelectHandle<T1, U1>> for SelectHandle<T2, U2>
+where
+    T2: PartialEq<T1>,
+{
+    fn eq(&self, other: &SelectHandle<T1, U1>) -> bool {
+        (self.deref()).eq(other.deref())
+    }
+}
+
 impl<T: 'static, U: TypeUnion> From<T> for SelectHandle<T, U> {
     #[inline]
-    fn from(t: <Self as Typed>::Current) -> Self {
+    fn from(t: T) -> Self {
         unsafe { Self::from_unchecked(t) }
     }
 }
