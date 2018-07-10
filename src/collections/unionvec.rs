@@ -131,6 +131,7 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     /// # Panic
     ///
     /// When the closure panics, the internal Vector is leaked.
+    // @TODO: Optimize this more
     #[inline]
     pub fn map<S: Selector, F>(self, f: F) -> UnionVec<<U as Select<S>>::Output, U>
     where
@@ -230,6 +231,8 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     /// # Panic
     ///
     /// When the closure panics, the internal Vector is leaked.
+    //@TODO: make this faster
+    // First load up a few items from the Vec, then cast all at once
     #[inline]
     pub fn filter_map<S: Selector, F>(self, f: F) -> UnionVec<<U as Select<S>>::Output, U>
     where

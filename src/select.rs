@@ -168,7 +168,9 @@ impl<T, U: TypeUnion> Drop for SelectHandle<T, U> {
 
 #[cfg(test)]
 mod tests {
-    use super::SelectHandle;
+    use super::*;
+    use index::*;
+
     #[test]
     fn test_equals() {
         let select_handle_vec = unsafe {
@@ -181,5 +183,21 @@ mod tests {
 
         assert_eq!(select_handle_array, select_handle_vec);
         assert_eq!(select_handle_vec, select_handle_array);
+    }
+
+    #[test]
+    fn test_wrong_type_for_T() {
+        let handle = SelectHandle::<u32, (u32, String)>::from(10u32);
+
+        println!(
+            "{:?}",
+            ::std::any::TypeId::of::<<(u32, String) as Select<Type1>>::Output>()
+        );
+
+        println!("{:?}", ::std::any::TypeId::of::<u32>());
+
+        assert!(<(String, u32)>::contains::<u32>());
+        let handle = unsafe { handle.into_inner().select::<Type1>() };
+        //assert_eq!(handle.into(), String::new());
     }
 }
