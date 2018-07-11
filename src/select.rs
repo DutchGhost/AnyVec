@@ -43,7 +43,7 @@ pub unsafe trait TypeSelect<U: TypeUnion>: Sized {
         S: Selector,
         U: Select<S>,
     {
-        self.cast()
+        SelectHandle::from(self.cast::<<U as Select<S>>::Output>())
     }
 }
 
@@ -188,16 +188,13 @@ mod tests {
     #[test]
     fn test_wrong_type_for_T() {
         let handle = SelectHandle::<u32, (u32, String)>::from(10u32);
+        let handle = unsafe { handle.into_inner().select::<Type2>() };
 
-        println!(
-            "{:?}",
-            ::std::any::TypeId::of::<<(u32, String) as Select<Type1>>::Output>()
-        );
+        let mut s = handle.into();
 
-        println!("{:?}", ::std::any::TypeId::of::<u32>());
-
-        assert!(<(String, u32)>::contains::<u32>());
-        let handle = unsafe { handle.into_inner().select::<Type1>() };
-        //assert_eq!(handle.into(), String::new());
+        unsafe {
+            ptr::write(&mut s, String::new());
+        }
+        assert_eq!(s, String::new());
     }
 }

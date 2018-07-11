@@ -21,6 +21,17 @@ macro_rules! contains_type {
     )
 }
 
+// recursive macro to print TypeId's
+macro_rules! print_ty {
+    ($head:tt $(, $tail:tt)*) => {
+        println!("{} = {:?}", stringify!($head), type_id::<$head>());
+
+        print_ty!($($tail),*);
+    };
+
+    () => {};
+}
+
 macro_rules! Union {
     (   $d:tt,
         pub union $name:ident {
@@ -41,6 +52,8 @@ macro_rules! Union {
 
                 #[inline]
                 fn contains<T: 'static>() -> bool {
+                    // DEBUGGING
+                    // print_ty!($($generics),*);
                     contains_type!(T, [$($generics),*])
                 }
             }
