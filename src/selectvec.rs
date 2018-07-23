@@ -1,13 +1,13 @@
-use std::any::TypeId;
-use std::convert::{AsMut, AsRef};
 use std::fmt;
 use std::iter;
-use std::marker::PhantomData;
 use std::mem;
 use std::ptr;
+use std::any::TypeId;
+use std::marker::PhantomData;
+use std::convert::{AsMut, AsRef};
 
-use core::alloc::{Alloc, Layout};
 use std::alloc::Global;
+use core::alloc::{Alloc, Layout};
 
 /// Returns the TypeId of `T`.
 pub const fn type_id<T: 'static>() -> TypeId {
@@ -132,7 +132,8 @@ where
     #[inline]
     fn as_ref(&self) -> &T {
         //unsafe { mem::transmute(&self.data) }
-        unsafe { &*(&self.data as *const <D as TypeUnion>::Union as *const T) }
+        //unsafe { &*(&self.data as *const <D as TypeUnion>::Union as *const T) }
+        unsafe { cast_ref(&self.data) }
     }
 }
 
@@ -143,7 +144,8 @@ where
     #[inline]
     fn as_mut(&mut self) -> &mut T {
         //unsafe { mem::transmute(&mut self.data) }
-        unsafe { &mut *(&mut self.data as *mut <D as TypeUnion>::Union as *mut T) }
+        //unsafe { &mut *(&mut self.data as *mut <D as TypeUnion>::Union as *mut T) }
+        unsafe { cast_refmut(&mut self.data) }
     }
 }
 

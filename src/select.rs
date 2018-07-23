@@ -84,6 +84,18 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
         }
     }
 
+    /// Converts `self` into the `T`, and writes the value given into it.
+    /// This might be more safe to use than `into`, because the value its written using `ptr::write`.
+    #[inline]
+    pub fn store_into(mut self, store: T) -> T {
+        unsafe {
+            let mut t = ptr::read(&mut self as *mut _ as *mut T);
+            ptr::write(&mut t, store);
+            mem::forget(self);
+            t
+        }
+    }
+
     /// Creates a new `SelectHandle` from a Union.
     #[inline]
     pub unsafe fn from_inner(data: U::Union) -> Self {
@@ -99,6 +111,24 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
         let data = unsafe { ptr::read(&mut self.data) };
         mem::forget(self);
         data
+    }
+
+    /// Copies the current type. It is possible to have a SelectHandle<u64, (u64, String)>, and copy the u64.
+    /// This function is not available if T is non-copy
+    #[inline]
+    fn copy_current(&self) -> T
+    where
+        T: Copy
+    {
+        *self.deref()
+    }
+
+    #[inline]
+    fn write(&mut self, item: T) {
+        let t = self as *mut Self as *mut T;
+        unsafe {
+            ptr::write(t, item);
+        }
     }
 }
 
@@ -190,11 +220,19 @@ mod tests {
         let handle = SelectHandle::<u32, (u32, String)>::from(10u32);
         let handle = unsafe { handle.into_inner().select::<Type2>() };
 
-        let mut s = handle.into();
+        let mut s = handle.store_into(String::new());
 
-        unsafe {
-            ptr::write(&mut s, String::new());
-        }
         assert_eq!(s, String::new());
+    }
+
+    #[test]
+    fn test_copy_select_handle() {
+        let handle = SelectHandle::<String, (String, u64)>::from(String::from("hi"));
+
+        let mut handle = unsafe { handle.into_inner().select::<Type2>() };
+        handle.write(10);
+        let copy = handle.copy_current();
+
+        assert_eq!(copy, 10);
     }
 }

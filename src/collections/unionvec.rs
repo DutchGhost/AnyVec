@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 use std::mem;
 use std::ptr;
+use std::iter::FromIterator;
 
 use select::{Select, SelectHandle, Selector, TypeSelect, TypeUnion};
 
@@ -324,6 +325,21 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
 
 #[derive(Debug)]
 pub struct AlignError;
+
+impl <T, U: TypeUnion> FromIterator<T> for UnionVec<T, U> {
+
+    #[inline]
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut mapped_iter = iter.into_iter().map(|item| {
+            SelectHandle::<T, U>::from(item).into_inner()
+        });
+
+        Self {
+            data: Vec::from_iter(mapped_iter),
+            marker: PhantomData
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

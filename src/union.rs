@@ -33,7 +33,7 @@ macro_rules! print_ty {
 }
 
 macro_rules! Union {
-    (   $d:tt,
+    (
         pub union $name:ident {
         $($fieldnames:ident: $generics:tt),*
     }) => (
@@ -77,7 +77,6 @@ macro_rules! GenUnion {
         FIELDS = [$fieldname:ident: $generic:ident $(,$fieldnames:ident: $generics:ident)*]
     ) => {
         Union!(
-            "This union can hold the following Generics: ",
             pub union $name {
             $fieldname: $generic
             $(, $fieldnames: $generics)*
