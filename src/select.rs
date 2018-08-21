@@ -87,15 +87,9 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     /// Converts `self` into the `T`, and writes the value given into it.
     /// This might be more safe to use than `into`, because the value its written using `ptr::write`.
     #[inline]
-    pub fn store_into(mut self, val: T) -> T {
+    pub fn into_with(mut self, val: T) -> T {
         self.write(val);
         self.into()
-        // unsafe {
-        //     let mut t = ptr::read(&mut self as *mut _ as *mut T);
-        //     ptr::write(&mut t, store);
-        //     mem::forget(self);
-        //     t
-        // }
     }
 
     /// Creates a new `SelectHandle` from a Union.
@@ -151,17 +145,18 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     }
 
     /// Applies the closure on the underlying type, returning a new SelectHandle.
-    pub fn map<S: Selector, F: Fn(T) -> <U as Select<S>>::Output>(mut self, f: &F) -> SelectHandle<<U as Select<S>>::Output, U>
+    pub fn map<S: Selector, F: Fn(T) -> <U as Select<S>>::Output>(mut self, f: F) -> SelectHandle<<U as Select<S>>::Output, U>
     where
         U: Select<S>
     {
         let inner: T = self.into();
         let u: <U as Select<S>>::Output = f(inner);
-
-        unsafe { SelectHandle::from_unchecked(u) }
+        SelectHandle::from(u)
     }
 
-    pub fn filter_map<S, F>(mut self, f: &F) -> Option<SelectHandle<<U as Select<S>>::Output, U>>
+    /// Applies the closure on the underlying type.
+    /// Returns `Some` if the closure resulted in `Some`, `None` otherwise.
+    pub fn filter_map<S, F>(mut self, f: F) -> Option<SelectHandle<<U as Select<S>>::Output, U>>
     where
         S: Selector,
         U: Select<S>,
@@ -169,12 +164,9 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     {
         let inner: T = self.into();
         
-        match f(inner) {
-            Some(value) => unsafe {
-                Some(SelectHandle::from_unchecked(value))
-            }
-            None => None,
-        }
+        let maybe = f(inner)?;
+
+        Some(SelectHandle::from(maybe))
     }
 }
 
@@ -250,11 +242,11 @@ mod tests {
     #[test]
     fn test_equals() {
         let select_handle_vec = unsafe {
-            SelectHandle::<Vec<u8>, (Vec<u8>, String)>::from_unchecked(vec![1, 2, 3]);
+            SelectHandle::<Vec<u8>, (Vec<u8>, String)>::from(vec![1, 2, 3]);
         };
 
         let select_handle_array = unsafe {
-            SelectHandle::<[u8; 3], ([u8; 3], String)>::from_unchecked([1, 2, 3]);
+            SelectHandle::<[u8; 3], ([u8; 3], String)>::from([1, 2, 3]);
         };
 
         assert_eq!(select_handle_array, select_handle_vec);
@@ -262,11 +254,11 @@ mod tests {
     }
 
     #[test]
-    fn test_wrong_type_for_T() {
+    fn test_into_with() {
         let handle = SelectHandle::<u32, (u32, String)>::from(10u32);
-        let handle = unsafe { handle.into_inner().select::<Type2>() };
+        let handle = unsafe { handle.change_to::<Type2>() };
 
-        let mut s = handle.store_into(String::new());
+        let mut s = handle.into_with(String::new());
 
         assert_eq!(s, String::new());
     }
@@ -275,7 +267,7 @@ mod tests {
     fn test_copy_select_handle() {
         let handle = SelectHandle::<String, (String, u64)>::from(String::from("hi"));
 
-        let mut handle = unsafe { handle.into_inner().select::<Type2>() };
+        let mut handle = unsafe { handle.change_to::<Type2>() };
         handle.write(10);
         let copy = handle.copy_current();
 

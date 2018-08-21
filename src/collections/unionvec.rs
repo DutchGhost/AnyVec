@@ -93,7 +93,7 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     }
 
     /// Clears the underlying Vec, and returns a new [`UnionVec`].
-    /// The returned UnionVec will have the same capacity as the old one had.
+    /// The returned UnionVec will have the same capacity as the old one.
     #[inline]
     pub fn change_to<S>(mut self) -> UnionVec<<U as Select<S>>::Output, U>
     where
@@ -175,19 +175,24 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
                 // 7
                 let union_t: SelectHandle<T, U> = SelectHandle::from_inner(ptr::read(item_ptr));
 
+                // 8 + 9 + 10
                 let union_u: SelectHandle<<U as Select<S>>::Output, U> = union_t.map::<S, _>(&f);
-                // 8
-                //let t: T = union_t.into();
-
-                // 9
-                //let u = f(t);
-
-                // 10
-                // let union_u: SelectHandle<<U as Select<S>>::Output, U> =
-                //     SelectHandle::from_unchecked(u);
 
                 // 11
                 ptr::write(item_ptr, union_u.into_inner());
+
+                /*
+
+                // 8
+                let t: T = union_t.into();
+
+                // 9
+                let u = f(t);
+
+                // 10
+                 let union_u: SelectHandle<<U as Select<S>>::Output, U> =
+                     SelectHandle::from_unchecked(u);
+                */
             }
 
             // 12
@@ -256,20 +261,30 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
 
                 let union_t: SelectHandle<T, U> = SelectHandle::from_inner(ptr::read(read_ptr));
 
-                let t = union_t.into();
-
-                let u = match f(t) {
-                    Some(item) => item,
+                let u = match union_t.filter_map::<S, _>(&f) {
+                    Some(item) => item.into_inner(),
                     None => {
                         nones += 1;
-
                         continue;
                     }
                 };
 
-                let union_u: SelectHandle<<U as Select<S>>::Output, U> =
-                    SelectHandle::from_unchecked(u);
-                ptr::write(write_ptr, union_u.into_inner());
+                ptr::write(write_ptr, u);
+                
+                // let t = union_t.into();
+
+                // let u = match f(t) {
+                //     Some(item) => item,
+                //     None => {
+                //         nones += 1;
+
+                //         continue;
+                //     }
+                // };
+
+                // let union_u: SelectHandle<<U as Select<S>>::Output, U> =
+                //     SelectHandle::from_unchecked(u);
+                // ptr::write(write_ptr, union_u.into_inner());
             }
 
             data.set_len(len - nones);
