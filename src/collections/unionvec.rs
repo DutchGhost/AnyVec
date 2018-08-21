@@ -137,7 +137,7 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     pub fn map<S: Selector, F>(self, f: F) -> UnionVec<<U as Select<S>>::Output, U>
     where
         U: Select<S>,
-        F: Fn(T) -> <U as Select<S>>::Output,
+        F: Fn(T) -> <U as Select<S>>::Output
     {
         /*
          * 1) Get the underlying Vec
@@ -175,15 +175,16 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
                 // 7
                 let union_t: SelectHandle<T, U> = SelectHandle::from_inner(ptr::read(item_ptr));
 
+                let union_u: SelectHandle<<U as Select<S>>::Output, U> = union_t.map::<S, _>(&f);
                 // 8
-                let t: T = union_t.into();
+                //let t: T = union_t.into();
 
                 // 9
-                let u = f(t);
+                //let u = f(t);
 
                 // 10
-                let union_u: SelectHandle<<U as Select<S>>::Output, U> =
-                    SelectHandle::from_unchecked(u);
+                // let union_u: SelectHandle<<U as Select<S>>::Output, U> =
+                //     SelectHandle::from_unchecked(u);
 
                 // 11
                 ptr::write(item_ptr, union_u.into_inner());

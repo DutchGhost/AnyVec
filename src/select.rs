@@ -87,13 +87,15 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     /// Converts `self` into the `T`, and writes the value given into it.
     /// This might be more safe to use than `into`, because the value its written using `ptr::write`.
     #[inline]
-    pub fn store_into(mut self, store: T) -> T {
-        unsafe {
-            let mut t = ptr::read(&mut self as *mut _ as *mut T);
-            ptr::write(&mut t, store);
-            mem::forget(self);
-            t
-        }
+    pub fn store_into(mut self, val: T) -> T {
+        self.write(val);
+        self.into()
+        // unsafe {
+        //     let mut t = ptr::read(&mut self as *mut _ as *mut T);
+        //     ptr::write(&mut t, store);
+        //     mem::forget(self);
+        //     t
+        // }
     }
 
     /// Creates a new `SelectHandle` from a Union.
@@ -116,18 +118,62 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     /// Copies the current type. It is possible to have a SelectHandle<u64, (u64, String)>, and copy the u64.
     /// This function is not available if T is non-copy
     #[inline]
-    fn copy_current(&self) -> T
+    pub fn copy_current(&self) -> T
     where
         T: Copy
     {
         *self.deref()
     }
 
+    /// Writes to the underlying value using `ptr::write`.
     #[inline]
-    fn write(&mut self, item: T) {
+    pub fn write(&mut self, item: T) {
         let t = self as *mut Self as *mut T;
         unsafe {
             ptr::write(t, item);
+        }
+    }
+
+    /// Returns a new handle where the current type is the selected one.
+    /// This function drops the *current* held value.
+    /// Note that the value contained in the returned handle is undefined,
+    /// and should be written to using [`SelectHandle::write`].
+    #[inline]
+    pub fn change_to<S: Selector>(mut self) -> SelectHandle<<U as Select<S>>::Output, U>
+    where
+        U: Select<S>
+    {
+        unsafe {
+            ptr::drop_in_place::<T>(self.deref_mut());
+
+            self.into_inner().select::<S>()
+        }
+    }
+
+    /// Applies the closure on the underlying type, returning a new SelectHandle.
+    pub fn map<S: Selector, F: Fn(T) -> <U as Select<S>>::Output>(mut self, f: &F) -> SelectHandle<<U as Select<S>>::Output, U>
+    where
+        U: Select<S>
+    {
+        let inner: T = self.into();
+        let u: <U as Select<S>>::Output = f(inner);
+
+        unsafe { SelectHandle::from_unchecked(u) }
+    }
+
+    pub fn filter_map<S, F>(mut self, f: &F) -> Option<SelectHandle<<U as Select<S>>::Output, U>>
+    where
+        S: Selector,
+        U: Select<S>,
+        F: Fn(T) -> Option<<U as Select<S>>::Output>
+    {
+        let inner: T = self.into();
+        
+        match f(inner) {
+            Some(value) => unsafe {
+                Some(SelectHandle::from_unchecked(value))
+            }
+            None => None,
         }
     }
 }
