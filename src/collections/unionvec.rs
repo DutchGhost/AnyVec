@@ -394,7 +394,7 @@ impl <T, U: TypeUnion> FromIterator<T> for UnionVec<T, U> {
 
     #[inline]
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let mut mapped_iter = iter.into_iter().map(|item| {
+        let mapped_iter = iter.into_iter().map(|item| {
             SelectHandle::<T, U>::from(item).into_inner()
         });
 
@@ -444,7 +444,7 @@ mod tests {
             union_vec.push(s);
         }
 
-        let mut union_vec = union_vec.filter_map::<Type2, _>(|s| s.parse().ok());
+        let union_vec = union_vec.filter_map::<Type2, _>(|s| s.parse().ok());
 
         // the last parse failed, so there are only 3 items in the vec.
         assert_eq!(union_vec.len(), 3);
@@ -461,9 +461,9 @@ mod tests {
             union_vec.push(s);
         }
 
-        let mut union_vec = union_vec.filter_map::<Type1, _>(|s| s.parse().ok());
+        let union_vec = union_vec.filter_map::<Type1, _>(|s| s.parse().ok());
 
-        let mut v = union_vec.into_vec().unwrap();
+        let v = union_vec.into_vec().unwrap();
         assert_eq!(v.capacity(), 8);
         assert_eq!(v, vec![10, 20, 30, 40]);
     }
