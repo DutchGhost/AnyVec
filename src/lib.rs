@@ -6,12 +6,6 @@
 //#![feature(trace_macros)]
 //trace_macros!(true);
 
-extern crate core;
-//pub mod selectvec;
-
-//mod macros;
-//pub use macros::*;
-
 // Modularized.
 pub mod index;
 pub mod select;

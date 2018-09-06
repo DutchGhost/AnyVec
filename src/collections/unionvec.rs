@@ -270,21 +270,6 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
                 };
 
                 ptr::write(write_ptr, u);
-
-                // let t = union_t.into();
-
-                // let u = match f(t) {
-                //     Some(item) => item,
-                //     None => {
-                //         nones += 1;
-
-                //         continue;
-                //     }
-                // };
-
-                // let union_u: SelectHandle<<U as Select<S>>::Output, U> =
-                //     SelectHandle::from_unchecked(u);
-                // ptr::write(write_ptr, union_u.into_inner());
             }
 
             data.set_len(len - nones);
@@ -296,6 +281,8 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
         }
     }
 
+    /// Transforms the underlying Vector of Unions into a Vector of T.
+    /// If the alignment of the Union is not a multiple of the alignment of T, an error is returned.
     #[inline]
     pub fn into_vec(self) -> Result<Vec<T>, AlignError> {
         if mem::align_of::<U::Union>() % mem::align_of::<T>() != 0 {
@@ -338,8 +325,11 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
         }
     }
 
+    /// Transforms the underlying Vector of Unions into a Vector of another type of the Union.
+    /// If the alignment of the Union is not a multiple of the alignment of the other type in the union, an error is returned.
+    /// This might be more performant than first using [`UnionVec::map`] and then transforming into a Vec using [`UnionVec::into_vec`]
     #[inline]
-    pub fn into_vec_map<S: Selector, F>(self, f: F) -> Result<Vec<<U as Select<S>>::Output>, AlignError>
+    pub fn map_into_vec<S: Selector, F>(self, f: F) -> Result<Vec<<U as Select<S>>::Output>, AlignError>
     where
         U: Select<S>,
         F: Fn(T) -> <U as Select<S>>::Output,
@@ -359,13 +349,66 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
             data.set_len(0);
 
             for i in 0..len as isize {
+
                 let read_ptr: *mut U::Union = base_read_ptr.offset(i);
                 let write_ptr: *mut <U as Select<S>>::Output = base_write_ptr.offset(i);
 
                 let union_t: SelectHandle<T, U> = SelectHandle::from_inner(ptr::read(read_ptr));
-                let t = union_t.into();
+                let union_u: SelectHandle<<U as Select<S>>::Output, U> = union_t.map::<S, _>(&f);
 
-                let u: <U as Select<S>>::Output = f(t);
+                ptr::write(write_ptr, union_u.into());
+            }
+
+            mem::forget(data);
+
+            let old_cap_in_bytes = old_cap * mem::size_of::<U::Union>();
+            let new_cap = old_cap_in_bytes / mem::size_of::<<U as Select<S>>::Output>();
+
+            if old_cap_in_bytes % mem::size_of::<<U as Select<S>>::Output>() != 0 {
+                let nonnull = ptr::NonNull::new(base_read_ptr).unwrap();
+                let layout = Layout::array::<U::Union>(old_cap).unwrap();
+
+                let _ = Global.realloc(nonnull.cast(), layout, new_cap * mem::size_of::<<U as Select<S>>::Output>());
+            }
+
+            Ok(Vec::from_raw_parts(base_write_ptr, len, new_cap))
+        }
+    }
+
+    #[inline]
+    pub fn flat_map_into_vec<S: Selector, F>(self, f: F) -> Result<Vec<<U as Select<S>>::Output>, AlignError>
+    where
+        U: Select<S>,
+        F: Fn(T) -> Option<<U as Select<S>>::Output>,
+    {
+        if mem::align_of::<U::Union>() % mem::align_of::<<U as Select<S>>::Output>() != 0 {
+            return Err(AlignError);
+        }
+
+        let mut data = self.into_data();
+        let old_cap = data.capacity();
+
+        let mut failed = 0;
+
+        unsafe {
+            let base_read_ptr = data.as_mut_ptr();
+            let base_write_ptr = base_read_ptr as *mut <U as Select<S>>::Output;
+
+            let len = data.len();
+            data.set_len(0);
+
+            for i in 0..len as isize {
+                let read_ptr: *mut U::Union = base_read_ptr.offset(i);
+                let write_ptr: *mut <U as Select<S>>::Output = base_write_ptr.offset(i - failed);
+
+                let union_t: SelectHandle<T, U> = SelectHandle::from_inner(ptr::read(read_ptr));
+                let u: <U as Select<S>>::Output = match union_t.filter_map::<S, _>(&f) {
+                    Some(value) => value.into(),
+                    None => {
+                        failed += 1;
+                        continue;
+                    }
+                };
 
                 ptr::write(write_ptr, u);
             }
@@ -375,14 +418,14 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
             let old_cap_in_bytes = old_cap * mem::size_of::<U::Union>();
             let new_cap = old_cap_in_bytes / mem::size_of::<<U as Select<S>>::Output>();
 
-            if old_cap_in_bytes % mem::size_of::<T>() != 0 {
+            if old_cap_in_bytes % mem::size_of::<<U as Select<S>>::Output>() != 0 {
                 let nonnull = ptr::NonNull::new(base_read_ptr).unwrap();
                 let layout = Layout::array::<U::Union>(old_cap).unwrap();
 
                 let _ = Global.realloc(nonnull.cast(), layout, new_cap * mem::size_of::<<U as Select<S>>::Output>());
             }
 
-            Ok(Vec::from_raw_parts(base_write_ptr, len, new_cap))
+            Ok(Vec::from_raw_parts(base_write_ptr, len - failed as usize, new_cap))
         }
     }
 }
@@ -408,7 +451,7 @@ impl <T, U: TypeUnion> FromIterator<T> for UnionVec<T, U> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use index::{Type1, Type2};
+    use index::Type2;
     #[test]
     fn test_unionvec_change_to() {
         let mut union_vec = UnionVec::<String, (String, u64)>::new();
@@ -455,16 +498,27 @@ mod tests {
 
     #[test]
     fn test_union_vec_into_vec() {
-        let mut union_vec = UnionVec::<&str, (i64, &str)>::new();
+        let mut union_vec = UnionVec::<&str, (&str, i64)>::new();
 
         for s in vec!["10", "20", "30", "40"] {
             union_vec.push(s);
         }
 
-        let union_vec = union_vec.filter_map::<Type1, _>(|s| s.parse().ok());
+        let union_vec = union_vec.filter_map::<Type2, _>(|s| s.parse().ok());
 
         let v = union_vec.into_vec().unwrap();
         assert_eq!(v.capacity(), 8);
+        assert_eq!(v, vec![10, 20, 30, 40]);
+    }
+
+    #[test]
+    fn test_union_vec_map_into_vec() {
+        let union_vec: UnionVec<&str, (&str, i32)> = vec!["10", "20", "30", "40"].into_iter().collect();
+
+        assert_eq!(union_vec.capacity(), 4);
+        let v = union_vec.flat_map_into_vec::<Type2, _>(|s| s.parse().ok()).unwrap();
+
+        assert_eq!(v.capacity(), 16);
         assert_eq!(v, vec![10, 20, 30, 40]);
     }
 }
