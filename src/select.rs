@@ -114,7 +114,7 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     #[inline]
     pub fn copy_current(&self) -> T
     where
-        T: Copy
+        T: Copy,
     {
         *self.deref()
     }
@@ -135,7 +135,7 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     #[inline]
     pub fn change_to<S: Selector>(mut self) -> SelectHandle<<U as Select<S>>::Output, U>
     where
-        U: Select<S>
+        U: Select<S>,
     {
         unsafe {
             ptr::drop_in_place::<T>(self.deref_mut());
@@ -145,9 +145,12 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     }
 
     /// Applies the closure on the underlying type, returning a new SelectHandle.
-    pub fn map<S: Selector, F: Fn(T) -> <U as Select<S>>::Output>(self, f: F) -> SelectHandle<<U as Select<S>>::Output, U>
+    pub fn map<S: Selector, F: Fn(T) -> <U as Select<S>>::Output>(
+        self,
+        f: F,
+    ) -> SelectHandle<<U as Select<S>>::Output, U>
     where
-        U: Select<S>
+        U: Select<S>,
     {
         let inner: T = self.into();
         let u: <U as Select<S>>::Output = f(inner);
@@ -160,7 +163,7 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     where
         S: Selector,
         U: Select<S>,
-        F: Fn(T) -> Option<<U as Select<S>>::Output>
+        F: Fn(T) -> Option<<U as Select<S>>::Output>,
     {
         let inner: T = self.into();
 
@@ -173,7 +176,7 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
 impl<T1, U1: TypeUnion, T2, U2: TypeUnion> PartialEq<SelectHandle<T1, U1>> for SelectHandle<T2, U2>
 where
     // T2: PartialEq<T1>,
-    <Self as Deref>::Target: PartialEq<<SelectHandle<T1, U1> as Deref>::Target>
+    <Self as Deref>::Target: PartialEq<<SelectHandle<T1, U1> as Deref>::Target>,
 {
     fn eq(&self, other: &SelectHandle<T1, U1>) -> bool {
         (self.deref()).eq(other.deref())

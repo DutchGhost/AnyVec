@@ -1,7 +1,7 @@
+use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::mem;
 use std::ptr;
-use std::iter::FromIterator;
 
 use select::{Select, SelectHandle, Selector, TypeSelect, TypeUnion};
 
@@ -137,7 +137,7 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     pub fn map<S: Selector, F>(self, f: F) -> UnionVec<<U as Select<S>>::Output, U>
     where
         U: Select<S>,
-        F: Fn(T) -> <U as Select<S>>::Output
+        F: Fn(T) -> <U as Select<S>>::Output,
     {
         /*
          * 1) Get the underlying Vec
@@ -154,10 +154,8 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
          * 12) restore the length
          */
 
-        // 1
+        // 1 + 2
         let mut data = self.into_data();
-
-        // 2
         let len = data.len();
 
         unsafe {
@@ -172,27 +170,13 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
                 // 6
                 let item_ptr: *mut U::Union = ptr.offset(i);
 
-                // 7
+                // 7 + 8 + 9 + 10
                 let union_t: SelectHandle<T, U> = SelectHandle::from_inner(ptr::read(item_ptr));
-
-                // 8 + 9 + 10
                 let union_u: SelectHandle<<U as Select<S>>::Output, U> = union_t.map::<S, _>(&f);
 
                 // 11
                 ptr::write(item_ptr, union_u.into_inner());
 
-                /*
-
-                // 8
-                let t: T = union_t.into();
-
-                // 9
-                let u = f(t);
-
-                // 10
-                 let union_u: SelectHandle<<U as Select<S>>::Output, U> =
-                     SelectHandle::from_unchecked(u);
-                */
             }
 
             // 12
@@ -329,7 +313,10 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     /// If the alignment of the Union is not a multiple of the alignment of the other type in the union, an error is returned.
     /// This might be more performant than first using [`UnionVec::map`] and then transforming into a Vec using [`UnionVec::into_vec`]
     #[inline]
-    pub fn map_into_vec<S: Selector, F>(self, f: F) -> Result<Vec<<U as Select<S>>::Output>, AlignError>
+    pub fn map_into_vec<S: Selector, F>(
+        self,
+        f: F,
+    ) -> Result<Vec<<U as Select<S>>::Output>, AlignError>
     where
         U: Select<S>,
         F: Fn(T) -> <U as Select<S>>::Output,
@@ -349,7 +336,6 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
             data.set_len(0);
 
             for i in 0..len as isize {
-
                 let read_ptr: *mut U::Union = base_read_ptr.offset(i);
                 let write_ptr: *mut <U as Select<S>>::Output = base_write_ptr.offset(i);
 
@@ -368,7 +354,11 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
                 let nonnull = ptr::NonNull::new(base_read_ptr).unwrap();
                 let layout = Layout::array::<U::Union>(old_cap).unwrap();
 
-                let _ = Global.realloc(nonnull.cast(), layout, new_cap * mem::size_of::<<U as Select<S>>::Output>());
+                let _ = Global.realloc(
+                    nonnull.cast(),
+                    layout,
+                    new_cap * mem::size_of::<<U as Select<S>>::Output>(),
+                );
             }
 
             Ok(Vec::from_raw_parts(base_write_ptr, len, new_cap))
@@ -376,7 +366,10 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
     }
 
     #[inline]
-    pub fn flat_map_into_vec<S: Selector, F>(self, f: F) -> Result<Vec<<U as Select<S>>::Output>, AlignError>
+    pub fn flat_map_into_vec<S: Selector, F>(
+        self,
+        f: F,
+    ) -> Result<Vec<<U as Select<S>>::Output>, AlignError>
     where
         U: Select<S>,
         F: Fn(T) -> Option<<U as Select<S>>::Output>,
@@ -422,28 +415,73 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
                 let nonnull = ptr::NonNull::new(base_read_ptr).unwrap();
                 let layout = Layout::array::<U::Union>(old_cap).unwrap();
 
-                let _ = Global.realloc(nonnull.cast(), layout, new_cap * mem::size_of::<<U as Select<S>>::Output>());
+                let _ = Global.realloc(
+                    nonnull.cast(),
+                    layout,
+                    new_cap * mem::size_of::<<U as Select<S>>::Output>(),
+                );
             }
 
-            Ok(Vec::from_raw_parts(base_write_ptr, len - failed as usize, new_cap))
+            Ok(Vec::from_raw_parts(
+                base_write_ptr,
+                len - failed as usize,
+                new_cap,
+            ))
         }
+    }
+
+    /// Returns a draining Iterator,
+    #[inline]
+    pub fn drain<'a, R>(&'a mut self, r: R) -> impl DoubleEndedIterator<Item = T> + 'a
+    where
+        R: ::std::ops::RangeBounds<usize>,
+    {
+        self.data.drain(r).map(move |i| unsafe {
+            let item = SelectHandle::<T, U>::from_inner(i);
+            item.into()
+        })
+    }
+
+    /// Returns a by-reference Iterator over the items contained in the Vector.
+    #[inline]
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &T> {
+        self.data
+            .iter()
+            .map(|item| unsafe { &*(item as *const <U as TypeUnion>::Union as *const T) })
+    }
+
+    /// Returns a by-mutable-reference Iterator over the items contained in the Vector.
+    /// This allows for mutation.
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut T> {
+        self.data
+            .iter_mut()
+            .map(|item| unsafe { &mut *(item as *mut <U as TypeUnion>::Union as *mut T) })
     }
 }
 
 #[derive(Debug)]
 pub struct AlignError;
 
-impl <T, U: TypeUnion> FromIterator<T> for UnionVec<T, U> {
+impl<T, U> Drop for UnionVec<T, U>
+where
+    U: TypeUnion,
+{
+    fn drop(&mut self) {
+        for _ in self.drain(..) {}
+    }
+}
 
+impl<T, U: TypeUnion> FromIterator<T> for UnionVec<T, U> {
     #[inline]
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let mapped_iter = iter.into_iter().map(|item| {
-            SelectHandle::<T, U>::from(item).into_inner()
-        });
+        let mapped_iter = iter
+            .into_iter()
+            .map(|item| SelectHandle::<T, U>::from(item).into_inner());
 
         Self {
             data: Vec::from_iter(mapped_iter),
-            marker: PhantomData
+            marker: PhantomData,
         }
     }
 }
@@ -513,10 +551,13 @@ mod tests {
 
     #[test]
     fn test_union_vec_map_into_vec() {
-        let union_vec: UnionVec<&str, (&str, i32)> = vec!["10", "20", "30", "40"].into_iter().collect();
+        let union_vec: UnionVec<&str, (&str, i32)> =
+            vec!["10", "20", "30", "40"].into_iter().collect();
 
         assert_eq!(union_vec.capacity(), 4);
-        let v = union_vec.flat_map_into_vec::<Type2, _>(|s| s.parse().ok()).unwrap();
+        let v = union_vec
+            .flat_map_into_vec::<Type2, _>(|s| s.parse().ok())
+            .unwrap();
 
         assert_eq!(v.capacity(), 16);
         assert_eq!(v, vec![10, 20, 30, 40]);
