@@ -3,7 +3,9 @@ use std::marker::PhantomData;
 use std::mem;
 use std::ptr;
 
-use select::{Select, SelectHandle, Selector, TypeSelect, TypeUnion};
+//use select_core::{Select::*, SelectHandle, Selector, TypeSelect, TypeUnion};
+
+use select_core::select::{Select, SelectHandle, TypeSelect, TypeUnion, Selector};
 
 use std::alloc::{Alloc, Global, Layout};
 
@@ -100,7 +102,8 @@ impl<T: 'static, U: TypeUnion> UnionVec<T, U> {
         S: Selector,
         U: Select<S>,
     {
-        self.data.clear();
+        // Drops all the values, but leaves the allocated space intact
+        for _ in self.drain(..) { };
 
         UnionVec {
             data: self.into_data(),
@@ -489,7 +492,8 @@ impl<T, U: TypeUnion> FromIterator<T> for UnionVec<T, U> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use index::Type2;
+    use select_core::index::Type2;
+
     #[test]
     fn test_unionvec_change_to() {
         let mut union_vec = UnionVec::<String, (String, u64)>::new();
