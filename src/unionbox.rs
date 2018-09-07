@@ -51,6 +51,56 @@ impl <T: 'static, U: TypeUnion> UnionBox<T, U> {
             }
         }
     }
+
+    #[inline]
+    pub fn filter_map<S, F>(self, f: F) -> Option<UnionBox<<U as Select<S>>::Output, U>>
+    where
+        S: Selector,
+        U: Select<S>,
+        F: Fn(T) -> Option<<U as Select<S>>::Output>
+    {
+        let data = self.into_data();
+
+        let ptr = Box::into_raw(data);
+
+        unsafe {
+            let union_t: SelectHandle<T, U> = SelectHandle::from_inner(ptr::read(ptr));
+            let union_u: SelectHandle<<U as Select<S>>::Output, U> = union_t.filter_map::<S, _>(&f)?;
+
+            ptr::write(ptr, union_u.into_inner());
+
+            Some(UnionBox {
+                data: Box::from_raw(ptr),
+                marker: PhantomData,
+            })
+        }
+    }
+
+    #[inline]
+    pub fn into_box(self) -> Box<T> {
+        let old_size = mem::size_of::<U::Union>();
+        let new_size = mem::size_of::<T>();
+
+        let data = self.into_data();
+        let read_ptr = Box::into_raw(data);
+        let write_ptr = read_ptr as *mut T;
+
+        unsafe {
+            let union_t: SelectHandle<T, U> = SelectHandle::from_inner(ptr::read(read_ptr));
+            let t = union_t.into();
+
+             ptr::write(write_ptr, t);
+
+             let byte_ptr = read_ptr as *mut u8;
+
+             {
+                 let mut slice = ::std::slice::from_raw_parts_mut(byte_ptr.offset(new_size as isize), old_size - new_size);
+                 let _ = Box::from_raw(slice.as_mut_ptr());
+             }
+
+             Box::from_raw(write_ptr)
+        }
+    }
 }
 
 impl <T, U: TypeUnion> Deref for UnionBox<T, U> {
