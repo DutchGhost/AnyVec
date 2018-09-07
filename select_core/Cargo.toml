@@ -1,0 +1,9 @@
+[package]
+name = "select_core"
+version = "0.1.0"
+authors = ["DutchGhost <kasper199914@gmail.com>"]
+
+[dependencies]
+
+[features]
+const_id = []
