@@ -47,8 +47,7 @@ macro_rules! Union {
 
                 #[inline]
                 fn contains<T: 'static>() -> bool {
-                    // DEBUGGING
-                    // print_ty!($($generics),*);
+
                     contains_type!(T, [$($generics),*])
                 }
             }
@@ -86,5 +85,16 @@ macro_rules! GenUnion {
 
 GenUnion!(
     NAMES = [Union10, Union9, Union8, Union7, Union6, Union5, Union4, Union3, Union2],
-    FIELDS = [_a: A, _b: B, _c: C, _d: D, _e: E, _f: F, _g: G, _h: H, _i: I, _j: J]
+    FIELDS = [
+        _a: A,
+        _b: B,
+        _c: C,
+        _d: D,
+        _e: E,
+        _f: F,
+        _g: G,
+        _h: H,
+        _i: I,
+        _j: J
+    ]
 );

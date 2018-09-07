@@ -69,17 +69,6 @@ macro_rules! select {
     );
 }
 
-/*
- *
- * s = 'ABCDEFGHIJ'
- * for (idx, letter) in enumerate(s[1:], start = 2):
- *      names = ' '.join(["NAMES", "=", '[', ', '.join(s[:idx]), ']' ])
- *      generics = ' '.join(["GENERICS", "=", '[', ', '.join([letter * 2 for letter in s[:idx]]), ']' ])
- *
- *      totall = ''.join(["select!(", names, ', ', generics, ');'])
- *      print(totall)
- */
-
 select!(NAMES = [Type1, Type2], GENERICS = [A, B]);
 select!(NAMES = [Type1, Type2, Type3], GENERICS = [A, B, C]);
 select!(

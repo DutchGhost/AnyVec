@@ -9,7 +9,7 @@ pub(crate) unsafe fn cast_ref<'a, T: 'a, U: 'a>(t_ref: &'a T) -> &'a U {
     &*(t_ref as *const T as *const U)
 }
 
-pub(crate) unsafe fn cast_refmut<'a, T: 'a, U: 'a>(t_ref: &'a mut T) -> &'a mut U {
+pub(crate) unsafe fn cast_mut<'a, T: 'a, U: 'a>(t_ref: &'a mut T) -> &'a mut U {
     &mut *(t_ref as *mut T as *mut U)
 }
 
@@ -74,6 +74,15 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
         s
     }
 
+    /// Creates a new `SelectHandle` from a Union.
+    #[inline]
+    pub unsafe fn from_inner(data: U::Union) -> Self {
+        Self {
+            data,
+            current: PhantomData,
+        }
+    }
+
     /// Converts `self` into `T`.
     #[inline]
     pub fn into(mut self) -> T {
@@ -81,23 +90,6 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
             let t = ptr::read(&mut self as *mut _ as *mut T);
             mem::forget(self);
             t
-        }
-    }
-
-    /// Converts `self` into the `T`, and writes the value given into it.
-    /// This might be more safe to use than `into`, because the value its written using `ptr::write`.
-    #[inline]
-    pub fn into_with(mut self, val: T) -> T {
-        self.write(val);
-        self.into()
-    }
-
-    /// Creates a new `SelectHandle` from a Union.
-    #[inline]
-    pub unsafe fn from_inner(data: U::Union) -> Self {
-        Self {
-            data,
-            current: PhantomData,
         }
     }
 
@@ -119,6 +111,15 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
         *self.deref()
     }
 
+    /// CLones the current type.
+    #[inline]
+    pub fn clone_current(&self) -> T
+    where
+        T: Clone,
+    {
+        self.deref().clone()
+    }
+
     /// Writes to the underlying value using `ptr::write`.
     #[inline]
     pub fn write(&mut self, item: T) {
@@ -133,8 +134,9 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     /// Note that the value contained in the returned handle is undefined,
     /// and should be written to using [`SelectHandle::write`].
     #[inline]
-    pub fn change_to<S: Selector>(mut self) -> SelectHandle<<U as Select<S>>::Output, U>
+    pub fn change_to<S>(mut self) -> SelectHandle<<U as Select<S>>::Output, U>
     where
+        S: Selector,
         U: Select<S>,
     {
         unsafe {
@@ -145,12 +147,11 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
     }
 
     /// Applies the closure on the underlying type, returning a new SelectHandle.
-    pub fn map<S: Selector, F: Fn(T) -> <U as Select<S>>::Output>(
-        self,
-        f: F,
-    ) -> SelectHandle<<U as Select<S>>::Output, U>
+    pub fn map<S, F>(self, f: F) -> SelectHandle<<U as Select<S>>::Output, U>
     where
+        S: Selector,
         U: Select<S>,
+        F: Fn(T) -> <U as Select<S>>::Output,
     {
         let inner: T = self.into();
         let u: <U as Select<S>>::Output = f(inner);
@@ -166,19 +167,16 @@ impl<T: 'static, U: TypeUnion> SelectHandle<T, U> {
         F: Fn(T) -> Option<<U as Select<S>>::Output>,
     {
         let inner: T = self.into();
-
         let maybe = f(inner)?;
-
         Some(SelectHandle::from(maybe))
     }
 }
 
-impl<T1, U1: TypeUnion, T2, U2: TypeUnion> PartialEq<SelectHandle<T1, U1>> for SelectHandle<T2, U2>
+impl<T1, U1: TypeUnion, T2, U2: TypeUnion> PartialEq<SelectHandle<T2, U2>> for SelectHandle<T1, U1>
 where
-    // T2: PartialEq<T1>,
-    <Self as Deref>::Target: PartialEq<<SelectHandle<T1, U1> as Deref>::Target>,
+    T1: PartialEq<T2>,
 {
-    fn eq(&self, other: &SelectHandle<T1, U1>) -> bool {
+    fn eq(&self, other: &SelectHandle<T2, U2>) -> bool {
         (self.deref()).eq(other.deref())
     }
 }
@@ -195,8 +193,6 @@ impl<T, U: TypeUnion> Deref for SelectHandle<T, U> {
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        //unsafe { &*(&self.data as *const <U as TypeUnion>::Union as *const T) }
-        //
         unsafe { cast_ref(&self.data) }
     }
 }
@@ -204,8 +200,7 @@ impl<T, U: TypeUnion> Deref for SelectHandle<T, U> {
 impl<T, U: TypeUnion> DerefMut for SelectHandle<T, U> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        //unsafe { &mut *(&mut self.data as *mut <U as TypeUnion>::Union as *mut T) }
-        unsafe { cast_refmut(&mut self.data) }
+        unsafe { cast_mut(&mut self.data) }
     }
 }
 
@@ -216,7 +211,13 @@ impl<T: fmt::Debug, U: TypeUnion> fmt::Debug for SelectHandle<T, U> {
     }
 }
 
-// @TODO: Fix this.
+impl<T: fmt::Display, U: TypeUnion> fmt::Display for SelectHandle<T, U> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.deref().fmt(f)
+    }
+}
+
 impl<T: 'static, U: TypeUnion> Clone for SelectHandle<T, U>
 where
     T: Clone,
@@ -231,7 +232,6 @@ where
 
 impl<T, U: TypeUnion> Drop for SelectHandle<T, U> {
     fn drop(&mut self) {
-        // `T` is the current held type.
         unsafe {
             ptr::drop_in_place::<T>(self.deref_mut());
         }
@@ -251,16 +251,6 @@ mod tests {
 
         //assert_eq!(select_handle_array, select_handle_vec);
         assert_eq!(select_handle_vec, select_handle_array);
-    }
-
-    #[test]
-    fn test_into_with() {
-        let handle = SelectHandle::<u32, (u32, String)>::from(10u32);
-        let handle = handle.change_to::<Type2>();
-
-        let s = handle.into_with(String::new());
-
-        assert_eq!(s, String::new());
     }
 
     #[test]
